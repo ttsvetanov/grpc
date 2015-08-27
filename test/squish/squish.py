@@ -7,6 +7,7 @@ import config
 
 #from rpyc_server import SquishServer
 from xmlrpc_server import SquishServer
+from grpc_server_test import GameEditor
 
 import thread
 
@@ -25,8 +26,10 @@ class State:
         Default event handling only deals with quitting.
         """
         if event.type == QUIT:
+            editorServer.shutdown()
             sys.exit()
         if event.type == KEYDOWN and event.key == K_ESCAPE:
+            editorServer.shutdown()
             sys.exit()
 
     def firstDisplay(self, screen):
@@ -280,8 +283,11 @@ class Game:
         pygame.display.set_caption('Fruit Self Defense')
         pygame.mouse.set_visible(False)
 
+        editorServer.start()
+
         # The main loop:
         while 1:
+            editorServer.call_all()
             # (1) If nextState has been changed, move to the new state, and
             #     display it (for the first time):
             if self.state != self.nextState:
@@ -296,23 +302,7 @@ class Game:
             self.state.display(screen)
 
 
-def set_speed(game):
-    while True:
-        try:
-            if game.state is None:
-                continue
-            if hasattr(game.state, "weight"):
-                game.state.weight.speed = 1
-                game.state.weight.speed += 1
-                print game.state.weight.speed
-        except AttributeError:
-            pass
-
-
 if __name__ == '__main__':
     game = Game(*sys.argv)
-    #thread.start_new_thread(SquishServer, (game,));
-    #thread.start_new_thread(set_speed, (game,));
-    SquishServer(game)
+    editorServer = GameEditor(game)
     game.run()
-

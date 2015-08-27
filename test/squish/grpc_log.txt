@@ -1,0 +1,17 @@
+ERROR:root:<type 'exceptions.NameError'> : global name 'Thread' is not defined
+ERROR:root:<type 'exceptions.NameError'> : global name 'Thread' is not defined
+ERROR:root:<type 'exceptions.NameError'> : global name 'Thread' is not defined
+ERROR:root:<type 'exceptions.NameError'> : global name 'Thread' is not defined
+ERROR:root:<type 'exceptions.NameError'> : global name 'Thread' is not defined
+ERROR:root:<type 'exceptions.NameError'> : global name 'Thread' is not defined
+ERROR:root:<type 'exceptions.NameError'> : global name 'Thread' is not defined
+ERROR:root:<type 'exceptions.NameError'> : global name 'Thread' is not defined
+ERROR:root:<type 'exceptions.NameError'> : global name 'Thread' is not defined
+ERROR:root:<type 'exceptions.NameError'> : global name 'Thread' is not defined
+ERROR:root:<type 'exceptions.NameError'> : global name 'Thread' is not defined
+ERROR:root:<type 'exceptions.NameError'> : global name 'Thread' is not defined
+ERROR:root:call_once: call failed.
+ERROR:root:call_once: call failed.
+ERROR:root:call_once: call failed.
+ERROR:root:call_once: call failed.
+ERROR:root:call_once: getattr failed, <type 'exceptions.AttributeError'> : 'GameEditor' object has no attribute '__dir__'

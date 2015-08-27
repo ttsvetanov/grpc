@@ -1,2 +1,2 @@
-# GRPyC
-Remote Python Call for Games
+# GRPC
+Remote Procedure Call for Games
