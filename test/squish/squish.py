@@ -5,7 +5,8 @@ from pygame.locals import *
 import objects
 import config
 
-from rpyc_server import SquishServer
+#from rpyc_server import SquishServer
+from xmlrpc_server import SquishServer
 
 import thread
 
@@ -310,8 +311,8 @@ def set_speed(game):
 
 if __name__ == '__main__':
     game = Game(*sys.argv)
-    s = SquishServer(game)
-    thread.start_new_thread(s.start, ());
+    #thread.start_new_thread(SquishServer, (game,));
     #thread.start_new_thread(set_speed, (game,));
+    SquishServer(game)
     game.run()
 

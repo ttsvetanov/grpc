@@ -67,6 +67,7 @@ class Service(object):
         else:
             name = "exposed_" + name
         return getattr(self, name)
+
     def _rpyc_delattr(self, name):
         raise AttributeError("access denied")
     def _rpyc_setattr(self, name, value):
