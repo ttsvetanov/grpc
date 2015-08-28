@@ -4,11 +4,11 @@ import SimpleXMLRPCServer
 import os
 import logging
 from Queue import *
-from threading import *
+from threading import Thread
 
 
 DEFAULT_SERVER_PORT = 10009
-logging.basicConfig(filename=os.path.join(os.getcwd(), 'grpc_log.txt'), level=logging.NOTSET)
+logging.basicConfig(filename=os.path.join(os.getcwd(), 'grpc_log.txt'), level=logging.DEBUG)
 
 
 class Server(object):
@@ -37,11 +37,10 @@ class Server(object):
         self.__server.shutdown()
 
     def get_next_request(self):
-        first_item = None
         try:
             first_item = self.request_records.get(False)
         except Empty:
-            pass
+            first_item = None
         finally:
             return first_item
 
