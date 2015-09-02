@@ -5,6 +5,7 @@ import logging
 
 
 DEFAULT_SERVER_PORT = 10009
+DEFAULT_SERVER_ADDRESS = ('localhost', DEFAULT_SERVER_PORT)
 
 LOG_FILE = os.path.join(os.getcwd(), 'grpc_log.txt')
 LOG_LEVEL = logging.DEBUG

@@ -1,53 +1,37 @@
 #! python2
 
 import logging
-import socket
 import config
 import select
 import pickle
 from netref import NetRef
+import connection
+
 
 class GrpcClient(object):
     def __init__(self):
-        self.server_proxy = None
-        self.sock = None
-        self.connected = False
+        self.__server_proxy = None
+        self.conn = connection.Connection(config.CLIENT_BUFFER_SIZE)
 
-    def try_to_connect(self, server_address=('localhost', config.DEFAULT_SERVER_PORT),
-            try_times = -1, delay = 1):
-        while try_times != 0:
-            try_times -= 1
-            try:
-                print 'trying to connect server...'
-                self.sock = socket.create_connection(server_address, timeout=delay)
-                if self.sock:
-                    self.connected = True
-                    print 'connected!'
-                    self.server_proxy = self.get_server_proxy();
-                    break
-            except socket.timeout:
-                print 'timeout'
-        return self.connected
+    @property
+    def server_proxy(self):
+        if not self.__server_proxy:
+            server_proxy_id = self.conn.sync_request(connection.ACTION_GETSERVERPROXY)
+            if server_proxy_id:
+                self.__server_proxy = NetRef(self.conn, server_proxy_id)
+        return self.__server_proxy
 
-    def get_server_proxy(self):
-        return self.getattr_from_server('0', 'server')
+    def __del__(self):
+        self.shutdown()
+
+    def connect(self, server_address=config.DEFAULT_SERVER_ADDRESS):
+        res = self.conn.connect(server_address)
 
     def shutdown(self):
-        self.sock.shutdown(socket.SHUT_RDWR)
-        self.connected = False
+        self.conn.send_shutdown()
+        self.conn.shutdown()
 
-    def getattr_from_server(self, oid, name):
-        if not self.connected:
-            return None
-        self.sock.sendall(pickle.dumps((oid, name)))
-        ready = select.select([self.sock], [], [], 5)
-        if ready[0]:
-            data = self.sock.recv(config.CLIENT_BUFFER_SIZE)
-            attr_oid, attr_str = pickle.loads(data)
-            return NetRef(self, attr_oid)
-        else:
-            return None
-
+'''
 if __name__ == '__main__':
     client = GrpcClient()
     client.try_to_connect()
@@ -57,3 +41,4 @@ if __name__ == '__main__':
         data = client.sock.recv(config.CLIENT_BUFFER_SIZE)
         print data
     client.shutdown()
+    '''
