@@ -15,10 +15,8 @@ class GrpcClient(object):
 
     @property
     def server_proxy(self):
-        if not self.__server_proxy:
-            server_proxy_id = self.conn.sync_request(connection.ACTION_GETSERVERPROXY)
-            if server_proxy_id:
-                self.__server_proxy = NetRef(self.conn, server_proxy_id)
+        if self.__server_proxy is None:
+            self.__server_proxy = self.conn.sync_request(connection.ACTION_GETSERVERPROXY)
         return self.__server_proxy
 
     def __del__(self):
