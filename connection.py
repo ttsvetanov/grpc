@@ -22,6 +22,9 @@ ACTION_STR = 4
 ACTION_REPR = 5
 ACTION_CALL = 6
 ACTION_GETSERVERPROXY = 7
+ACTION_DIR = 8
+ACTION_CMP = 9
+ACTION_HASH = 10
 
 # obj label
 LABEL_VALUE = 1
@@ -30,6 +33,8 @@ LABEL_LOCAL_REF = 3
 LABEL_REMOTE_REF = 4
 LABEL_NOTIMPLEMENTED = 5
 LABEL_ELLIPSIS = 6
+LABEL_LIST = 7
+LABEL_DICT = 8
 
 simple_types = frozenset([type(None), int, long, bool, float, str, unicode, complex])
 
@@ -46,7 +51,7 @@ class Connection(object):
 
         self.local_objects = {}  # on server
         self.proxy_cache = {}    # on client
-        self.netref_classes_cache = {}
+        self.netref_classes_cache = {}  # on client
 
     def __del__(self):
         self.shutdown()
@@ -107,6 +112,29 @@ class Connection(object):
             self.box(data)))
         self.__sock.sendall(pickled_data)
         return seq_num
+
+    def box(self, obj):
+        if type(obj) in simple_types:
+            return LABEL_VALUE, obj
+        elif obj is NotImplemented:     # pickle cannot dump NotImplemented
+            return LABEL_NOTIMPLEMENTED, None
+        elif obj is Ellipsis:           # pickle cannot dump Ellipsis
+            return LABEL_ELLIPSIS, None
+        elif type(obj) is tuple:
+            return LABEL_TUPLE, tuple(self.box(item) for item in obj)
+        elif type(obj) is list:
+            return LABEL_LIST, tuple(self.box(item) for item in obj)
+        elif type(obj) is dict:
+            return LABEL_DICT, tuple(self.box(item) for item in obj.items())
+        elif isinstance(obj, netref.NetRef) and obj.____conn__ is self:
+            return LABEL_LOCAL_REF, obj.____oid__
+        else:
+            self.local_objects[id(obj)] = obj
+            try:
+                cls = obj.__class__
+            except:
+                cls = type(obj)
+            return LABEL_REMOTE_REF, (id(obj), cls.__name__, cls.__module__)
     # ...
     # end
     # send functions
@@ -131,6 +159,44 @@ class Connection(object):
                 # send 'object has been del'
                 pass
         return None
+
+    def unbox(self, package):
+        label, value = package
+        if label == LABEL_VALUE:
+            return value
+        elif label == LABEL_TUPLE:
+            return tuple(self.unbox(item) for item in value)
+        elif label == LABEL_LIST:
+            return list(self.unbox(item) for item in value)
+        elif label == LABEL_DICT:
+            return dict(self.unbox(item) for item in value)
+        elif label == LABEL_NOTIMPLEMENTED:
+            return NotImplemented
+        elif label == LABEL_ELLIPSIS:
+            return Ellipsis
+        elif label == LABEL_LOCAL_REF:
+            try:
+                obj = self.local_objects[value]
+            except KeyError:
+                raise
+            else:
+                return obj
+        elif label == LABEL_REMOTE_REF:
+            oid, clsname, modname = value
+            if oid in self.proxy_cache:
+                return self.proxy_cache[oid]
+            else:
+                proxy = self.netref_factory(oid, clsname, modname)
+                self.proxy_cache[oid] = proxy
+                return proxy
+        else:
+            raise ValueError("invalid label {}".format(label))
+
+    def netref_factory(self, oid, clsname, modname):
+        typeinfo = (clsname, modname)
+        cls = netref.class_factory(clsname, modname)
+        self.netref_classes_cache[typeinfo] = cls
+        return cls(self, oid)
     # ...
     # end
     # recv functions
@@ -146,66 +212,6 @@ class Connection(object):
         if msg_type == MSG_REPLY and recv_seq_num == seq_num:
             return recv_data
         return None
-
-    def box(self, obj):
-        if type(obj) in simple_types:
-            return LABEL_VALUE, obj
-        elif obj is NotImplemented:     # pickle cannot dump NotImplemented
-            return LABEL_NOTIMPLEMENTED, None
-        elif obj is Ellipsis:           # pickle cannot dump Ellipsis
-            return LABEL_ELLIPSIS, None
-        elif type(obj) is tuple:
-            return LABEL_TUPLE, tuple(self.box(item) for item in obj)
-        elif isinstance(obj, netref.NetRef) and obj.____conn__ is self:
-            return LABEL_LOCAL_REF, obj.____oid__
-        else:
-            self.local_objects[id(obj)] = obj
-            try:
-                cls = obj.__class__
-            except:
-                cls = type(obj)
-            return LABEL_REMOTE_REF, (id(obj), cls.__name__, cls.__module__)
-
-    def unbox(self, package):
-        label, obj = package
-        if label == LABEL_VALUE:
-            return obj
-        elif label == LABEL_TUPLE:
-            return tuple(self.unbox(item) for item in obj)
-        elif label == LABEL_NOTIMPLEMENTED:
-            return NotImplemented
-        elif label == LABEL_ELLIPSIS:
-            return Ellipsis
-        elif label == LABEL_LOCAL_REF:
-            try:
-                weak_local_obj = local_objects[obj]
-            except KeyError:
-                raise
-            else:
-                return weak_local_obj
-        elif label == LABEL_REMOTE_REF:
-            oid, clsname, modname = obj
-            if oid in self.proxy_cache:
-                return self.proxy_cache[oid]
-            else:
-                proxy = self.netref_factory(oid, clsname, modname)
-                self.proxy_cache[oid] = proxy
-                return proxy
-        else:
-            raise ValueError("invalid label {}".format(label))
-
-    def netref_factory(self, oid, clsname, modname):
-        typeinfo = (clsname, modname)
-        if typeinfo in self.netref_classes_cache:
-            cls = self.netref_classes_cache[typeinfo]
-        elif typeinfo in netref.builtin_classes_cache:
-            cls = netref.builtin_classes_cache[typeinfo]
-        else:
-            # info = self.sync_request(consts.HANDLE_INSPECT, oid)
-            info = {}
-            cls = netref.class_factory(clsname, modname, info)
-            self.netref_classes_cache[typeinfo] = cls
-        return cls(self, oid)
     # ...
     # end
     # useful functions
