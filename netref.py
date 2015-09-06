@@ -20,11 +20,18 @@ class NetRef(object):
 
     def __getattribute__(self, name):
         if name in local_netref_attrs:
+            if name == '__class__' or name == '__doc__':
+                return self.__getattr__(name)
+            elif name == '__members__' or name == '__dir__':
+                return self.__getattr__('__dir__')
             return object.__getattribute__(self, name)
         else:
-            attr_oid = self.____conn__.sync_request(connection.ACTION_GETATTR,
-                    (self.____oid__, name))
-            return NetRef(self.____conn__, attr_oid)
+            return self.__getattr__(name)
+
+    def __getattr__(self, name):
+        attr_oid = self.____conn__.sync_request(connection.ACTION_GETATTR,
+                (self.____oid__, name))
+        return NetRef(self.____conn__, attr_oid)
         
     def __str__(self):
         res = self.____conn__.sync_request(connection.ACTION_STR, self.____oid__)
