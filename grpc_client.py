@@ -12,24 +12,24 @@ import connection
 class GrpcClient(object):
     def __init__(self):
         self.__server_proxy = None
-        self.conn = connection.Connection(config.CLIENT_BUFFER_SIZE)
+        self.__conn = connection.Connection(config.CLIENT_BUFFER_SIZE)
 
     @property
     def server_proxy(self):
         if self.__server_proxy is None:
-            self.__server_proxy = self.conn.sync_request(connection.ACTION_GETSERVERPROXY)
+            self.__server_proxy = self.__conn.sync_request(connection.ACTION_GETSERVERPROXY)
         return self.__server_proxy
 
     def __del__(self):
         self.shutdown()
 
     def connect(self, server_address=config.DEFAULT_SERVER_ADDRESS):
-        res = self.conn.connect(server_address)
+        res = self.__conn.connect(server_address)
         self.__server_proxy = None
 
     def shutdown(self):
-        self.conn.send_shutdown()
-        self.conn.shutdown()
+        self.__conn.send_shutdown()
+        self.__conn.shutdown()
 
 '''
 if __name__ == '__main__':

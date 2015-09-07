@@ -63,7 +63,7 @@ class NetRef(object):
     def __cmp__(self, other):
         return self.____conn__.sync_request(connection.ACTION_CMP, (self, other))
 
-    def __hash(self):
+    def __hash__(self):
         return self.____conn__.sync_request(connection.ACTION_HASH, self)
 
 

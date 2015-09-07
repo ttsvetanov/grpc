@@ -52,11 +52,11 @@ class Connection(object):
         self.__sock = None
         self.__buffer_size = buffer_size
         self.__seq_num = 1      # next request's sequence number
-        self.connected = False
+        self.__connected = False
 
-        self.local_objects = {}  # on server
-        self.proxy_cache = {}    # on client
-        self.netref_classes_cache = {}  # on client
+        self.__local_objects = {}  # on server
+        self.__proxy_cache = {}    # on client
+        self.__netref_classes_cache = {}  # on client
 
     def __del__(self):
         self.shutdown()
@@ -67,28 +67,35 @@ class Connection(object):
     def accept(self, server_sock):
         client_sock, address = server_sock.accept()
         self.__sock = client_sock
-        self.connected = True
-        return self.connected
+        self.__connected = True
+        return self.__connected
 
     def connect(self, server_address):
+        if self.__connected:
+            return self.__connected
         while True:
             try:
                 print 'connecting'
                 self.__sock = socket.create_connection(server_address, timeout=1)
                 if self.__sock:
-                    self.connected = True
+                    self.__connected = True
                     break
             except socket.timeout:
                 print 'timeout'
             except:
                 traceback.print_exc()
                 raise
-        return self.connected
+        return self.__connected
 
     def shutdown(self, flag = socket.SHUT_RDWR):
-        if self.connected:
+        if self.__connected:
             self.__sock.shutdown(flag)
-            self.connected = False
+            self.local_object = {}
+            self.__proxy_cache = {}
+            self.__netref_classes_cache = {}
+            self.__sock = None
+            self.__seq_num = 1
+            self.__connected = False
     # ...
     # end
     # network control
@@ -97,29 +104,29 @@ class Connection(object):
     # start
     # ...
     def send_request(self, action_type, data):
-        res = self.send(MSG_REQUEST, self.__seq_num, action_type, data)
+        res = self.__send(MSG_REQUEST, self.__seq_num, action_type, data)
         if res > 0:
             self.__seq_num += 1
         return res
 
     def send_reply(self, seq_num, action_type, data):
-        return self.send(MSG_REPLY, seq_num, action_type, data)
+        return self.__send(MSG_REPLY, seq_num, action_type, data)
 
     def send_shutdown(self):
-        return self.send(MSG_SHUTDOWN, 1, 0, None)
+        return self.__send(MSG_SHUTDOWN, 0, 0, None)
 
     def send_exception(self, data):
         pass
 
-    def send(self, msg_type, seq_num, action_type, data):
-        if self.connected == False:
+    def __send(self, msg_type, seq_num, action_type, data):
+        if self.__connected == False:
             return -1
         pickled_data = pickle.dumps((msg_type, seq_num, action_type,
-            self.box(data)))
+            self.__box(data)))
         self.__sock.sendall(pickled_data)
         return seq_num
 
-    def box(self, obj):
+    def __box(self, obj):
         if type(obj) in simple_types:
             return LABEL_VALUE, obj
         elif obj is NotImplemented:     # pickle cannot dump NotImplemented
@@ -127,15 +134,15 @@ class Connection(object):
         elif obj is Ellipsis:           # pickle cannot dump Ellipsis
             return LABEL_ELLIPSIS, None
         elif type(obj) is tuple:
-            return LABEL_TUPLE, tuple(self.box(item) for item in obj)
+            return LABEL_TUPLE, tuple(self.__box(item) for item in obj)
         elif type(obj) is list:
-            return LABEL_LIST, tuple(self.box(item) for item in obj)
+            return LABEL_LIST, tuple(self.__box(item) for item in obj)
         elif type(obj) is dict:
-            return LABEL_DICT, tuple(self.box(item) for item in obj.items())
+            return LABEL_DICT, tuple(self.__box(item) for item in obj.items())
         elif isinstance(obj, netref.NetRef) and obj.____conn__ is self:
             return LABEL_LOCAL_REF, obj.____oid__
         else:
-            self.local_objects[id(obj)] = obj
+            self.__local_objects[id(obj)] = obj
             try:
                 cls = obj.__class__
             except:
@@ -149,7 +156,7 @@ class Connection(object):
     # start
     # ...
     def recv(self, timeout = -1.0):
-        if self.connected == False:
+        if self.__connected == False:
             return None
         if timeout < 0:
             ready = select.select([self.__sock], [], []);
@@ -165,49 +172,51 @@ class Connection(object):
 
             msg_type, seq_num, action_type, data = pickle.loads(pickled_data)
             try:
-                unboxed_data = self.unbox(data)
+                unboxed_data = self.__unbox(data)
+                if msg_type == MSG_SHUTDOWN:
+                    self.shutdown()
                 return msg_type, seq_num, action_type, unboxed_data
             except KeyError:
                 # send 'object has been del'
                 pass
         return None
 
-    def unbox(self, package):
+    def __unbox(self, package):
         label, value = package
         if label == LABEL_VALUE:
             return value
         elif label == LABEL_TUPLE:
-            return tuple(self.unbox(item) for item in value)
+            return tuple(self.__unbox(item) for item in value)
         elif label == LABEL_LIST:
-            return list(self.unbox(item) for item in value)
+            return list(self.__unbox(item) for item in value)
         elif label == LABEL_DICT:
-            return dict(self.unbox(item) for item in value)
+            return dict(self.__unbox(item) for item in value)
         elif label == LABEL_NOTIMPLEMENTED:
             return NotImplemented
         elif label == LABEL_ELLIPSIS:
             return Ellipsis
         elif label == LABEL_LOCAL_REF:
             try:
-                obj = self.local_objects[value]
+                obj = self.__local_objects[value]
             except KeyError:
                 raise
             else:
                 return obj
         elif label == LABEL_REMOTE_REF:
             oid, clsname, modname = value
-            if oid in self.proxy_cache:
-                return self.proxy_cache[oid]
+            if oid in self.__proxy_cache:
+                return self.__proxy_cache[oid]
             else:
-                proxy = self.netref_factory(oid, clsname, modname)
-                self.proxy_cache[oid] = proxy
+                proxy = self.__netref_factory(oid, clsname, modname)
+                self.__proxy_cache[oid] = proxy
                 return proxy
         else:
             raise ValueError("invalid label {}".format(label))
 
-    def netref_factory(self, oid, clsname, modname):
+    def __netref_factory(self, oid, clsname, modname):
         typeinfo = (clsname, modname)
         cls = netref.class_factory(clsname, modname)
-        self.netref_classes_cache[typeinfo] = cls
+        self.__netref_classes_cache[typeinfo] = cls
         return cls(self, oid)
     # ...
     # end
@@ -224,6 +233,10 @@ class Connection(object):
         if msg_type == MSG_REPLY and recv_seq_num == seq_num:
             return recv_data
         return None
+
+    @property
+    def connected(self):
+        return self.__connected
     # ...
     # end
     # useful functions
