@@ -6,6 +6,7 @@ import socket
 import config
 import connection
 import threading
+import traceback
 
 
 class ModuleNamespace(object):
@@ -16,10 +17,13 @@ class ModuleNamespace(object):
     def __getitem__(self, name):
         if type(name) is tuple:
             name = ".".join(name)
-        if name not in self.__cache:
+        print name, name not in self.__cache
+        if name not in self.__cache or self.__cache[name] is None:
             self.__cache[name] = self.__getmodule(name)
+            print self.__cache[name]
         return self.__cache[name]
     def __getattr__(self, name):
+        print 'getattr__', name
         return self[name]
 
 
@@ -73,11 +77,11 @@ class GrpcServer(object):
 
     def handle_getattr(self, data):
         obj, attr_name = data
-        if hasattr(obj, attr_name):
+        try:
             attr = getattr(obj, attr_name)
             return attr
-        else:
-            print 'Cannot find attr: {}'.format(attr_name)
+        except:
+            traceback.print_exc()
         return None
 
     def handle_setattr(self, data):
@@ -106,6 +110,7 @@ class GrpcServer(object):
             res = func(*args, **kwargs)
         except:
             logging.error("handle_call error. function:{}".format(str(func)))
+            traceback.print_exc()
         return res
 
     def handle_dir(self, data):

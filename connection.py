@@ -7,6 +7,7 @@ import config
 import netref
 import pickle
 import weakref
+import traceback
 
 
 # MSG_TYPE
@@ -80,6 +81,7 @@ class Connection(object):
             except socket.timeout:
                 print 'timeout'
             except:
+                traceback.print_exc()
                 raise
         return self.connected
 
