@@ -1,4 +1,5 @@
 #! python2
+#-*- coding: utf-8 -*-
 
 import connection
 import types
@@ -27,7 +28,7 @@ class NetRef(object):
             if name == '__class__' or name == '__doc__':
                 return self.__getattr__(name)
             elif name == '__members__':
-                return self.__getattr__('__dir__')
+                return self.__dir__()
             return object.__getattribute__(self, name)
         else:
             return self.__getattr__(name)

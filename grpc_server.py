@@ -1,4 +1,5 @@
 #! python2
+#-*- coding: utf-8 -*-
 
 import logging
 import socket
@@ -7,15 +8,28 @@ import connection
 import threading
 
 
+class ModuleNamespace(object):
+    __slots__ = ["__getmodule", "__cache", "__weakref__"]
+    def __init__(self, getmodule):
+        self.__getmodule = getmodule
+        self.__cache = {}
+    def __getitem__(self, name):
+        if type(name) is tuple:
+            name = ".".join(name)
+        if name not in self.__cache:
+            self.__cache[name] = self.__getmodule(name)
+        return self.__cache[name]
+    def __getattr__(self, name):
+        return self[name]
+
+
 class GrpcServer(object):
     def __init__(self, server_port = config.DEFAULT_SERVER_PORT):
-        self.modules = None
         self.test = 2
         self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_sock.bind(('localhost', server_port))
         self.server_sock.listen(5)
-
-        self.attrs_object = {}
+        self.modules = ModuleNamespace(self.get_module)
 
     def foo(self):
         print 'foo'
@@ -31,7 +45,8 @@ class GrpcServer(object):
     def handle_request(self, conn):
         while True:
             msg_type, seq_num, action_type, data = conn.recv()
-            print msg_type, seq_num, action_type, data
+            print (connection.msg_str[msg_type], seq_num,
+                    connection.action_str[action_type], data)
             res = None
             if msg_type == connection.MSG_REQUEST:
                 if action_type == connection.ACTION_GETATTR:
@@ -61,6 +76,8 @@ class GrpcServer(object):
         if hasattr(obj, attr_name):
             attr = getattr(obj, attr_name)
             return attr
+        else:
+            print 'Cannot find attr: {}'.format(attr_name)
         return None
 
     def handle_setattr(self, data):
@@ -105,6 +122,15 @@ class GrpcServer(object):
     def handle_hash(self, data):
         obj = data
         return hash(obj)
+
+    def get_module(self, name):
+        return __import__(name, None, None, '*')
+
+    def eval(self, text):
+        return eval(text)
+
+    def execute(self, text):
+        exec text
 
 
 if __name__ == '__main__':

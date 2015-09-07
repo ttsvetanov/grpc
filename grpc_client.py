@@ -1,4 +1,5 @@
 #! python2
+#-*- coding: utf-8 -*-
 
 import logging
 import config
@@ -24,6 +25,7 @@ class GrpcClient(object):
 
     def connect(self, server_address=config.DEFAULT_SERVER_ADDRESS):
         res = self.conn.connect(server_address)
+        self.__server_proxy = None
 
     def shutdown(self):
         self.conn.send_shutdown()

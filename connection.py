@@ -1,4 +1,5 @@
 #! python2
+#-*- coding: utf-8 -*-
 
 import select
 import socket
@@ -13,6 +14,7 @@ MSG_REQUEST = 1
 MSG_REPLY = 2
 MSG_EXCEPTION = 3
 MSG_SHUTDOWN = 4
+msg_str = ('msg type str', 'request', 'reply', 'exception', 'shutdown')
 
 # Action_Type
 ACTION_GETATTR = 1
@@ -25,6 +27,8 @@ ACTION_GETSERVERPROXY = 7
 ACTION_DIR = 8
 ACTION_CMP = 9
 ACTION_HASH = 10
+action_str = ('action type str', 'getattr', 'setattr', 'delattr', 
+        'str', 'repr', 'call', 'server_proxy', 'dir', 'cmp', 'hash')
 
 # obj label
 LABEL_VALUE = 1
@@ -151,6 +155,12 @@ class Connection(object):
             ready = select.select([self.__sock], [], [], timeout);
         if ready[0]:
             pickled_data = self.__sock.recv(self.__buffer_size)
+            # 接收全部数据
+            ready = select.select([self.__sock], [], [], 0)
+            while ready[0]:
+                pickled_data = "".join([pickled_data, self.__sock.recv(self.__buffer_size)])
+                ready = select.select([self.__sock], [], [], 0)
+
             msg_type, seq_num, action_type, data = pickle.loads(pickled_data)
             try:
                 unboxed_data = self.unbox(data)
