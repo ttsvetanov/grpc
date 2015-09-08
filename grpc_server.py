@@ -3,18 +3,19 @@
 
 import logging
 import socket
-import config
-import connection
 import threading
 import traceback
 import select
+
+import config
+import connection
 
 # server mode
 ACTIVE_MODE = 1
 PASSIVE_MODE = 2
 
 class ModuleNamespace(object):
-    __slots__ = ["__getmodule", "__cache", "__weakref__"]
+    __slots__ = ["__getmodule", "__cache"]
     def __init__(self, getmodule):
         self.__getmodule = getmodule
         self.__cache = {}
@@ -61,18 +62,22 @@ class GrpcServer(object):
                         client_addr = conn.accept(self.__server_sock)
                         print 'Hello, ', client_addr
                         self.__conns_lock.acquire()
-                        self.__conns.append(conn)
-                        self.__conns_lock.release()
+                        try:
+                            self.__conns.append(conn)
+                        finally:
+                            self.__conns_lock.release()
 
     def shutdown(self):
         if self.__serve == True:
             self.__serve = False
             self.__conns_lock.acquire()
-            for conn in self.__conns:
-                conn.send_shutdown()
-                conn.shutdown()
-            self.__conns = []
-            self.__conns_lock.release()
+            try:
+                for conn in self.__conns:
+                    conn.send_shutdown()
+                    conn.shutdown()
+                self.__conns = []
+            finally:
+                self.__conns_lock.release()
 
     def __handle_request_active(self):
         while self.__serve:
@@ -80,9 +85,11 @@ class GrpcServer(object):
 
     def handle_request(self):
         self.__conns_lock.acquire()
-        for i in range(len(self.__conns)):
-            self.__handle_request_once(i)
-        self.__conns_lock.release()
+        try:
+            for i in range(len(self.__conns)):
+                self.__handle_request_once(i)
+        finally:
+            self.__conns_lock.release()
 
     def __handle_request_once(self, index):
         conn = self.__conns[index]
@@ -115,6 +122,8 @@ class GrpcServer(object):
                 res = self.__handle_cmp(data)
             elif action_type == connection.ACTION_HASH:
                 res = self.__handle_hash(data)
+            elif action_type == connection.ACTION_DEL:
+                res = self.__handle_del(conn, data)
         elif msg_type == connection.MSG_SHUTDOWN:
             print 'Bye, ', conn
             self.__conns.pop(index)
@@ -172,6 +181,10 @@ class GrpcServer(object):
     def __handle_hash(self, data):
         obj = data
         return hash(obj)
+
+    def __handle_del(self, conn, data):
+        obj = data
+        return conn.del_local_object(obj)
 
     def __get_module(self, name):
         return __import__(name, None, None, '*')

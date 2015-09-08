@@ -23,6 +23,10 @@ class NetRef(object):
         self.____conn__ = conn
         self.____oid__ = oid
 
+    def __del__(self):
+        print 'del'
+        self.____conn__.sync_request(connection.ACTION_DEL, self)
+
     def __getattribute__(self, name):
         if name in local_netref_attrs:
             if name == '__class__' or name == '__doc__':

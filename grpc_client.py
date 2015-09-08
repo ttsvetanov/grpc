@@ -2,10 +2,10 @@
 #-*- coding: utf-8 -*-
 
 import logging
-import config
 import select
 import pickle
-from netref import NetRef
+
+import config
 import connection
 
 

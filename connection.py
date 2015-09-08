@@ -3,11 +3,12 @@
 
 import select
 import socket
+import pickle
+import traceback
+
 import config
 import netref
-import pickle
-import weakref
-import traceback
+import utils
 
 
 # MSG_TYPE
@@ -28,8 +29,9 @@ ACTION_GETSERVERPROXY = 7
 ACTION_DIR = 8
 ACTION_CMP = 9
 ACTION_HASH = 10
+ACTION_DEL = 11
 action_str = ('action type str', 'getattr', 'setattr', 'delattr', 
-        'str', 'repr', 'call', 'server_proxy', 'dir', 'cmp', 'hash')
+        'str', 'repr', 'call', 'server_proxy', 'dir', 'cmp', 'hash', 'del')
 
 # obj label
 LABEL_VALUE = 1
@@ -54,7 +56,7 @@ class Connection(object):
         self.__seq_num = 1      # next request's sequence number
         self.__connected = False
 
-        self.__local_objects = {}  # on server
+        self.__local_objects = utils.CountDict()  # on server
         self.__proxy_cache = {}    # on client
         self.__netref_classes_cache = {}  # on client
 
@@ -90,7 +92,7 @@ class Connection(object):
     def shutdown(self, flag = socket.SHUT_RDWR):
         if self.__connected:
             self.__sock.shutdown(flag)
-            self.local_object = {}
+            self.__local_objects.clear()
             self.__proxy_cache = {}
             self.__netref_classes_cache = {}
             self.__sock = None
@@ -145,7 +147,7 @@ class Connection(object):
         elif isinstance(obj, netref.NetRef) and obj.____conn__ is self:
             return LABEL_LOCAL_REF, obj.____oid__
         else:
-            self.__local_objects[id(obj)] = obj
+            self.__local_objects.add(obj)
             try:
                 cls = obj.__class__
             except:
@@ -243,6 +245,9 @@ class Connection(object):
     @property
     def connected(self):
         return self.__connected
+
+    def del_local_object(self, obj):
+        del self.__local_objects[id(obj)]
     # ...
     # end
     # useful functions
