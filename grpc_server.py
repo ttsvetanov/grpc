@@ -58,7 +58,8 @@ class GrpcServer(object):
                 for s in ready[0]:
                     if s is self.__server_sock:
                         conn = connection.Connection(config.SERVER_BUFFER_SIZE)
-                        conn.accept(self.__server_sock)
+                        client_addr = conn.accept(self.__server_sock)
+                        print 'Hello, ', client_addr
                         self.__conns_lock.acquire()
                         self.__conns.append(conn)
                         self.__conns_lock.release()
@@ -115,10 +116,9 @@ class GrpcServer(object):
             elif action_type == connection.ACTION_HASH:
                 res = self.__handle_hash(data)
         elif msg_type == connection.MSG_SHUTDOWN:
+            print 'Bye, ', conn
             self.__conns.pop(index)
-            print 'pop'
         conn.send_reply(seq_num, action_type, res)
-        print 'send_reply'
 
     def __handle_getattr(self, data):
         obj, attr_name = data

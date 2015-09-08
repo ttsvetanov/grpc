@@ -30,6 +30,7 @@ class GrpcClient(object):
     def shutdown(self):
         self.__conn.send_shutdown()
         self.__conn.shutdown()
+        self.__server_proxy = None
 
 '''
 if __name__ == '__main__':
