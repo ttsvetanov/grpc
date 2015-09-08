@@ -7,6 +7,7 @@ import config
 import connection
 import threading
 import traceback
+import select
 
 # server mode
 ACTIVE_MODE = 1
@@ -20,19 +21,17 @@ class ModuleNamespace(object):
     def __getitem__(self, name):
         if type(name) is tuple:
             name = ".".join(name)
-        print name, name not in self.__cache
         if name not in self.__cache or self.__cache[name] is None:
             self.__cache[name] = self.__getmodule(name)
-            print self.__cache[name]
         return self.__cache[name]
     def __getattr__(self, name):
-        print 'getattr__', name
         return self[name]
 
 
 class GrpcServer(object):
     def __init__(self, server_port = config.DEFAULT_SERVER_PORT):
         self.__server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.__server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.__server_sock.bind(('localhost', server_port))
         self.__server_sock.listen(5)
         self.modules = ModuleNamespace(self.__get_module)
@@ -55,11 +54,14 @@ class GrpcServer(object):
                 t = threading.Thread(target=self.__handle_request_active)
                 t.start()
             while self.__serve:
-                conn = connection.Connection(config.SERVER_BUFFER_SIZE)
-                if conn.accept(self.__server_sock):
-                    self.__conns_lock.acquire()
-                    self.__conns.append(conn)
-                    self.__conns_lock.release()
+                ready = select.select([self.__server_sock], [], [], 0.5)
+                for s in ready[0]:
+                    if s is self.__server_sock:
+                        conn = connection.Connection(config.SERVER_BUFFER_SIZE)
+                        conn.accept(self.__server_sock)
+                        self.__conns_lock.acquire()
+                        self.__conns.append(conn)
+                        self.__conns_lock.release()
 
     def shutdown(self):
         if self.__serve == True:
@@ -68,7 +70,7 @@ class GrpcServer(object):
             for conn in self.__conns:
                 conn.send_shutdown()
                 conn.shutdown()
-            self.__conns.clear()
+            self.__conns = []
             self.__conns_lock.release()
 
     def __handle_request_active(self):
@@ -114,7 +116,9 @@ class GrpcServer(object):
                 res = self.__handle_hash(data)
         elif msg_type == connection.MSG_SHUTDOWN:
             self.__conns.pop(index)
+            print 'pop'
         conn.send_reply(seq_num, action_type, res)
+        print 'send_reply'
 
     def __handle_getattr(self, data):
         obj, attr_name = data

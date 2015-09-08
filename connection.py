@@ -113,7 +113,7 @@ class Connection(object):
         return self.__send(MSG_REPLY, seq_num, action_type, data)
 
     def send_shutdown(self):
-        return self.__send(MSG_SHUTDOWN, 0, 0, None)
+        return self.__send(MSG_SHUTDOWN, 0, 0, 0)
 
     def send_exception(self, data):
         pass
@@ -165,16 +165,21 @@ class Connection(object):
         if ready[0]:
             pickled_data = self.__sock.recv(self.__buffer_size)
             # 接收全部数据
-            ready = select.select([self.__sock], [], [], 0)
-            while ready[0]:
+            # socket 关闭后，ready[0]==[rlist], ready[1]==[]
+            # 未关闭的socket, ready[0]==[rlist], ready[1]==[wlist]
+            ready = select.select([self.__sock], [self.__sock], [], 0)
+            while ready[0] and ready[1]:
+                print 're recv'
+                print ready
                 pickled_data = "".join([pickled_data, self.__sock.recv(self.__buffer_size)])
-                ready = select.select([self.__sock], [], [], 0)
+                ready = select.select([self.__sock], [self.__sock], [], 0)
 
             msg_type, seq_num, action_type, data = pickle.loads(pickled_data)
             try:
                 unboxed_data = self.__unbox(data)
                 if msg_type == MSG_SHUTDOWN:
                     self.shutdown()
+                    print 'connection shutdown'
                 return msg_type, seq_num, action_type, unboxed_data
             except KeyError:
                 # send 'object has been del'
