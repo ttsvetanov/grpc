@@ -2,6 +2,8 @@
 #-*- coding: utf-8 -*-
 
 import threading
+import weakref
+import types
 
 
 class CountDict(object):
@@ -10,7 +12,7 @@ class CountDict(object):
         self.__dict = {}
 
     def __repr__(self):
-        return repf(self._dict)
+        return repf(self.__dict)
 
     def __str___(self):
         return self.__repr__()
@@ -22,15 +24,29 @@ class CountDict(object):
         try:
             if self.__dict.has_key(key):
                 self.__dict[key][1] += 1
+            elif (isinstance(value, types.FunctionType)
+                    or isinstance(value, types.MethodType)
+                    or isinstance(value, types.UnboundMethodType)):
+                ref_value = value
+                self.__dict[key] = [False, 1, value]    # [isweak, count, value]
+                print 'Ref strong type: ', type(value)
             else:
-                self.__dict[key] = [value, 1]
+                try:
+                    ref_value = weakref.ref(value)
+                    self.__dict[key] = [True, 1, ref_value]
+                except TypeError:
+                    print 'Ref strong type: ', type(value)
+                    self.__dict[key] = [False, 1, value]
         finally:
             self.__lock.release()
 
     def __getitem__(self, key):
         self.__lock.acquire()
         try:
-            return self.__dict[key][0]
+            if self.__dict[key][0]:
+                return self.__dict[key][2]()
+            else:
+                return self.__dict[key][2]
         finally:
             self.__lock.release()
 

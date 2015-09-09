@@ -15,7 +15,7 @@ ACTIVE_MODE = 1
 PASSIVE_MODE = 2
 
 class ModuleNamespace(object):
-    __slots__ = ["__getmodule", "__cache"]
+    #__slots__ = ["__getmodule", "__cache"]
     def __init__(self, getmodule):
         self.__getmodule = getmodule
         self.__cache = {}

@@ -17,7 +17,7 @@ local_netref_attrs = frozenset([
 
 
 class NetRef(object):
-    __slots__ = ["____conn__", "____oid__"]
+    #__slots__ = ["____conn__", "____oid__"]
     
     def __init__(self, conn, oid):
         self.____conn__ = conn
