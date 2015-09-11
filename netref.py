@@ -1,7 +1,7 @@
 #! python2
 #-*- coding: utf-8 -*-
 
-import connection
+import service
 import types
 import inspect
 import sys
@@ -24,8 +24,7 @@ class NetRef(object):
         self.____oid__ = oid
 
     def __del__(self):
-        print 'del'
-        self.____conn__.sync_request(connection.ACTION_DEL, self)
+        self.____conn__.sync_request(service.ACTION_DEL, self)
 
     def __getattribute__(self, name):
         if name in local_netref_attrs:
@@ -38,37 +37,37 @@ class NetRef(object):
             return self.__getattr__(name)
 
     def __getattr__(self, name):
-        return self.____conn__.sync_request(connection.ACTION_GETATTR, (self, name))
+        return self.____conn__.sync_request(service.ACTION_GETATTR, (self, name))
 
     def __setattr__(self, name, value):
         if name in local_netref_attrs:
             object.__setattr__(self, name, value)
         else:
-            self.____conn__.sync_request(connection.ACTION_SETATTR, (self, name, value))
+            self.____conn__.sync_request(service.ACTION_SETATTR, (self, name, value))
 
     def __delattr__(self, name):
         if name in local_netref_attrs:
             object.__delattr__(name)
         else:
-            self.____conn__.sync_request(connection.ACTION_DELATTR, (self, name))
+            self.____conn__.sync_request(service.ACTION_DELATTR, (self, name))
         
     def __str__(self):
-        return self.____conn__.sync_request(connection.ACTION_STR, self)
+        return self.____conn__.sync_request(service.ACTION_STR, self)
 
     def __repr__(self):
-        return self.____conn__.sync_request(connection.ACTION_REPR, self)
+        return self.____conn__.sync_request(service.ACTION_REPR, self)
 
     def __call__(self, *args, **kwargs):
-        return self.____conn__.sync_request(connection.ACTION_CALL, (self, args, kwargs))
+        return self.____conn__.sync_request(service.ACTION_CALL, (self, args, kwargs))
 
     def __dir__(self):
-        return list(self.____conn__.sync_request(connection.ACTION_DIR, self))
+        return list(self.____conn__.sync_request(service.ACTION_DIR, self))
 
     def __cmp__(self, other):
-        return self.____conn__.sync_request(connection.ACTION_CMP, (self, other))
+        return self.____conn__.sync_request(service.ACTION_CMP, (self, other))
 
     def __hash__(self):
-        return self.____conn__.sync_request(connection.ACTION_HASH, self)
+        return self.____conn__.sync_request(service.ACTION_HASH, self)
 
 
 def class_factory(clsname, modname):
@@ -83,9 +82,5 @@ def class_factory(clsname, modname):
     modname = str(modname)
     ns = {"__slots__" : ()}
     ns["__module__"] = modname
-    if modname in sys.modules and hasattr(sys.modules[modname], clsname):
-        ns["__class__"] = getattr(sys.modules[modname], clsname)
-    else:
-        # to be resolved by the instance
-        ns["__class__"] = None
+    ns["__class__"] = None
     return type(clsname, (NetRef,), ns)

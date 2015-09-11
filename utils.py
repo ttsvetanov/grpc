@@ -29,13 +29,13 @@ class CountDict(object):
                     or isinstance(value, types.UnboundMethodType)):
                 ref_value = value
                 self.__dict[key] = [False, 1, value]    # [isweak, count, value]
-                print 'Ref strong type: ', type(value)
+                #print 'Ref strong type: ', type(value)
             else:
                 try:
                     ref_value = weakref.ref(value)
                     self.__dict[key] = [True, 1, ref_value]
                 except TypeError:
-                    print 'Ref strong type: ', type(value)
+                    #print 'Ref strong type: ', type(value)
                     self.__dict[key] = [False, 1, value]
         finally:
             self.__lock.release()
