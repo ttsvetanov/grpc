@@ -36,7 +36,7 @@ class GrpcServer(object):
         self.__server_sock.bind(('localhost', server_port))
         self.__server_sock.listen(5)
         self.modules = ModuleNamespace(self.__get_module)
-        self.__mode = ACTIVE_MODE
+        self.__mode = PASSIVE_MODE
         self.__conns = []
         self.__conns_lock = threading.Lock()
         self.__serve = False
@@ -49,7 +49,7 @@ class GrpcServer(object):
         print 'foo'
         return 'foo'
 
-    def serve_forever(self, mode=ACTIVE_MODE):
+    def serve_forever(self, mode=PASSIVE_MODE):
         if self.__serve == False:
             self.__mode = mode
             self.__serve = True
@@ -248,4 +248,4 @@ class GrpcServer(object):
 
 if __name__ == '__main__':
     server = GrpcServer()
-    server.serve_forever()
+    server.serve_forever(ACTIVE_MODE)
