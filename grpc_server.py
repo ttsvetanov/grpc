@@ -138,10 +138,15 @@ class GrpcServer(object):
                 res = self.__handle_len(data)
             elif action_type == connection.ACTION_SETITEM:
                 res = self.__handle_setitem(data)
+            elif action_type == connection.ACTION_NEXT:
+                res = self.__handle_next(data)
         elif msg_type == connection.MSG_SHUTDOWN:
             print 'Bye, ', conn
             self.__conns.pop(index)
-        conn.send_reply(seq_num, action_type, res)
+        if isinstance(res, Exception):
+            conn.send_exception(seq_num, res)
+        else:
+            conn.send_reply(seq_num, action_type, res)
 
     def __handle_getattr(self, data):
         obj, attr_name = data
@@ -223,6 +228,13 @@ class GrpcServer(object):
     def __handle_setitem(self, data):
         obj, key, value = data
         return obj.__setitem__(key, value)
+
+    def __handle_next(self, data):
+        obj = data
+        try:
+            return obj.next()
+        except StopIteration as e:
+            return e
 
     def __get_module(self, name):
         return __import__(name, None, None, '*')

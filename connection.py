@@ -36,9 +36,10 @@ ACTION_GETITEM = 14
 ACTION_ITER = 15
 ACTION_LEN = 16
 ACTION_SETITEM = 17
+ACTION_NEXT = 18
 action_str = ('action type str', 'getattr', 'setattr', 'delattr', 
         'str', 'repr', 'call', 'server_proxy', 'dir', 'cmp', 'hash', 'del',
-        'contains', 'delitem', 'getitem', 'iter', 'len', 'setitem')
+        'contains', 'delitem', 'getitem', 'iter', 'len', 'setitem', 'next')
 
 # obj label
 LABEL_VALUE = 1
@@ -127,8 +128,10 @@ class Connection(object):
         except socket.error:
             return -1
 
-    def send_exception(self, data):
-        pass
+    def send_exception(self, seq_num, data):
+        pickled_data = pickle.dumps((MSG_EXCEPTION, seq_num, 0, data))
+        self.__sock.sendall(pickled_data)
+        return seq_num
 
     def __send(self, msg_type, seq_num, action_type, data, unpick_dl):
         if self.__connected == False:
@@ -191,7 +194,9 @@ class Connection(object):
                     unboxed_data = self.__unbox(data, True)
                 elif msg_type == MSG_REPLY:
                     unboxed_data = self.__unbox(data, False)
-                if msg_type == MSG_SHUTDOWN:
+                elif msg_type == MSG_EXCEPTION:
+                    unboxed_data = data
+                elif msg_type == MSG_SHUTDOWN:
                     self.shutdown()
                 return msg_type, seq_num, action_type, unboxed_data
             except KeyError:
@@ -248,7 +253,8 @@ class Connection(object):
         if seq_num < 0:
             return None
         msg_type, recv_seq_num, action_type, recv_data = self.recv()
-        if msg_type == MSG_REPLY and recv_seq_num == seq_num:
+        if ((msg_type == MSG_REPLY or msg_type == MSG_EXCEPTION)
+                and recv_seq_num == seq_num):
             return recv_data
         return None
 

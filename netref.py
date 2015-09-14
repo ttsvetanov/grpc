@@ -61,7 +61,8 @@ class NetRef(object):
         return self.____conn__.sync_request(connection.ACTION_CALL, (self, args, kwargs))
 
     def __dir__(self):
-        return list(self.____conn__.sync_request(connection.ACTION_DIR, self))
+        rlist = self.____conn__.sync_request(connection.ACTION_DIR, self)
+        return eval(repr(rlist))
 
     def __cmp__(self, other):
         return self.____conn__.sync_request(connection.ACTION_CMP, (self, other))
@@ -73,7 +74,7 @@ class NetRef(object):
         return self.____conn__.sync_request(connection.ACTION_CONTAINS, (self, item))
 
     def __delitem__(self, key):
-        return self.____conn__.sync_request(connection.ACTION_GETITEM, (self, key))
+        return self.____conn__.sync_request(connection.ACTION_DELITEM, (self, key))
 
     def __getitem__(self, key):
         return self.____conn__.sync_request(connection.ACTION_GETITEM, (self, key))
@@ -86,6 +87,12 @@ class NetRef(object):
 
     def __setitem__(self, key, value):
         return self.____conn__.sync_request(connection.ACTION_SETITEM, (self, key, value))
+
+    def next(self):
+        res = self.____conn__.sync_request(connection.ACTION_NEXT, self)
+        if isinstance(res, StopIteration):
+            raise res
+        return res
 
 
 def class_factory(clsname, modname):
