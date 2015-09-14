@@ -30,8 +30,15 @@ ACTION_DIR = 8
 ACTION_CMP = 9
 ACTION_HASH = 10
 ACTION_DEL = 11
+ACTION_CONTAINS = 12
+ACTION_DELITEM = 13
+ACTION_GETITEM = 14
+ACTION_ITER = 15
+ACTION_LEN = 16
+ACTION_SETITEM = 17
 action_str = ('action type str', 'getattr', 'setattr', 'delattr', 
-        'str', 'repr', 'call', 'server_proxy', 'dir', 'cmp', 'hash', 'del')
+        'str', 'repr', 'call', 'server_proxy', 'dir', 'cmp', 'hash', 'del',
+        'contains', 'delitem', 'getitem', 'iter', 'len', 'setitem')
 
 # obj label
 LABEL_VALUE = 1
@@ -106,32 +113,32 @@ class Connection(object):
     # start
     # ...
     def send_request(self, action_type, data):
-        res = self.__send(MSG_REQUEST, self.__seq_num, action_type, data)
+        res = self.__send(MSG_REQUEST, self.__seq_num, action_type, data, True)
         if res > 0:
             self.__seq_num += 1
         return res
 
     def send_reply(self, seq_num, action_type, data):
-        return self.__send(MSG_REPLY, seq_num, action_type, data)
+        return self.__send(MSG_REPLY, seq_num, action_type, data, False)
 
     def send_shutdown(self):
         try:
-            return self.__send(MSG_SHUTDOWN, 0, 0, 0)
+            return self.__send(MSG_SHUTDOWN, 0, 0, 0, False)
         except socket.error:
             return -1
 
     def send_exception(self, data):
         pass
 
-    def __send(self, msg_type, seq_num, action_type, data):
+    def __send(self, msg_type, seq_num, action_type, data, unpick_dl):
         if self.__connected == False:
             return -1
         pickled_data = pickle.dumps((msg_type, seq_num, action_type,
-            self.__box(data)))
+            self.__box(data, unpick_dl)))
         self.__sock.sendall(pickled_data)
         return seq_num
 
-    def __box(self, obj):
+    def __box(self, obj, unpick_dl):
         if type(obj) in simple_types:
             return LABEL_VALUE, obj
         elif obj is NotImplemented:     # pickle cannot dump NotImplemented
@@ -139,11 +146,11 @@ class Connection(object):
         elif obj is Ellipsis:           # pickle cannot dump Ellipsis
             return LABEL_ELLIPSIS, None
         elif type(obj) is tuple:
-            return LABEL_TUPLE, tuple(self.__box(item) for item in obj)
-        elif type(obj) is list:
-            return LABEL_LIST, tuple(self.__box(item) for item in obj)
-        elif type(obj) is dict:
-            return LABEL_DICT, tuple(self.__box(item) for item in obj.items())
+            return LABEL_TUPLE, tuple(self.__box(item, unpick_dl) for item in obj)
+        elif type(obj) is list and unpick_dl:
+            return LABEL_LIST, tuple(self.__box(item, unpick_dl) for item in obj)
+        elif type(obj) is dict and unpick_dl:
+            return LABEL_DICT, tuple(self.__box(item, unpick_dl) for item in obj.items())
         elif isinstance(obj, netref.NetRef) and obj.____conn__ is self:
             return LABEL_LOCAL_REF, obj.____oid__
         else:
@@ -180,7 +187,10 @@ class Connection(object):
 
             msg_type, seq_num, action_type, data = pickle.loads(pickled_data)
             try:
-                unboxed_data = self.__unbox(data)
+                if msg_type == MSG_REQUEST:
+                    unboxed_data = self.__unbox(data, True)
+                elif msg_type == MSG_REPLY:
+                    unboxed_data = self.__unbox(data, False)
                 if msg_type == MSG_SHUTDOWN:
                     self.shutdown()
                 return msg_type, seq_num, action_type, unboxed_data
@@ -189,16 +199,16 @@ class Connection(object):
                 pass
         return None
 
-    def __unbox(self, package):
+    def __unbox(self, package, unpick_dl):
         label, value = package
         if label == LABEL_VALUE:
             return value
         elif label == LABEL_TUPLE:
-            return tuple(self.__unbox(item) for item in value)
-        elif label == LABEL_LIST:
-            return list(self.__unbox(item) for item in value)
-        elif label == LABEL_DICT:
-            return dict(self.__unbox(item) for item in value)
+            return tuple(self.__unbox(item, unpick_dl) for item in value)
+        elif label == LABEL_LIST and unpick_dl:
+            return list(self.__unbox(item, unpick_dl) for item in value)
+        elif label == LABEL_DICT and unpick_dl:
+            return dict(self.__unbox(item, unpick_dl) for item in value)
         elif label == LABEL_NOTIMPLEMENTED:
             return NotImplemented
         elif label == LABEL_ELLIPSIS:

@@ -24,7 +24,6 @@ class NetRef(object):
         self.____oid__ = oid
 
     def __del__(self):
-        print 'del'
         self.____conn__.sync_request(connection.ACTION_DEL, self)
 
     def __getattribute__(self, name):
@@ -69,6 +68,24 @@ class NetRef(object):
 
     def __hash__(self):
         return self.____conn__.sync_request(connection.ACTION_HASH, self)
+
+    def __contains__(self, item):
+        return self.____conn__.sync_request(connection.ACTION_CONTAINS, (self, item))
+
+    def __delitem__(self, key):
+        return self.____conn__.sync_request(connection.ACTION_GETITEM, (self, key))
+
+    def __getitem__(self, key):
+        return self.____conn__.sync_request(connection.ACTION_GETITEM, (self, key))
+
+    def __iter__(self):
+        return self.____conn__.sync_request(connection.ACTION_ITER, self)
+
+    def __len__(self):
+        return self.____conn__.sync_request(connection.ACTION_LEN, self)
+
+    def __setitem__(self, key, value):
+        return self.____conn__.sync_request(connection.ACTION_SETITEM, (self, key, value))
 
 
 def class_factory(clsname, modname):

@@ -42,6 +42,8 @@ class GrpcServer(object):
         self.__serve = False
 
         self.test = 2
+        self.d = {}
+        self.l = []
 
     def foo(self):
         print 'foo'
@@ -124,6 +126,18 @@ class GrpcServer(object):
                 res = self.__handle_hash(data)
             elif action_type == connection.ACTION_DEL:
                 res = self.__handle_del(conn, data)
+            elif action_type == connection.ACTION_CONTAINS:
+                res = self.__handle_contains(data)
+            elif action_type == connection.ACTION_DELITEM:
+                res = self.__handle_delitem(data)
+            elif action_type == connection.ACTION_GETITEM:
+                res = self.__handle_getitem(data)
+            elif action_type == connection.ACTION_ITER:
+                res = self.__handle_iter(data)
+            elif action_type == connection.ACTION_LEN:
+                res = self.__handle_len(data)
+            elif action_type == connection.ACTION_SETITEM:
+                res = self.__handle_setitem(data)
         elif msg_type == connection.MSG_SHUTDOWN:
             print 'Bye, ', conn
             self.__conns.pop(index)
@@ -185,6 +199,30 @@ class GrpcServer(object):
     def __handle_del(self, conn, data):
         obj = data
         return conn.del_local_object(obj)
+
+    def __handle_contains(self, data):
+        obj, item = data
+        return obj.__contains__(item)
+
+    def __handle_delitem(self, data):
+        obj, key = data
+        return obj.__delitem__(key)
+
+    def __handle_getitem(self, data):
+        obj, key = data
+        return obj.__getitem__(key)
+
+    def __handle_iter(self, data):
+        obj = data
+        return obj.__iter__()
+
+    def __handle_len(self, data):
+        obj = data
+        return obj.__len__()
+
+    def __handle_setitem(self, data):
+        obj, key, value = data
+        return obj.__setitem__(key, value)
 
     def __get_module(self, name):
         return __import__(name, None, None, '*')
