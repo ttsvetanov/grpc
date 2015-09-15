@@ -20,6 +20,10 @@ class GrpcClient(object):
             self.__server_proxy = self.__conn.sync_request(connection.ACTION_GETSERVERPROXY)
         return self.__server_proxy
 
+    @property
+    def connected(self):
+        return self.__conn.__connected
+
     def __del__(self):
         self.shutdown()
 

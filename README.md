@@ -86,3 +86,14 @@ operation to the proxy, and it will affect the corresponding server object:
     print len(dict_proxy)
     for item in dect_proxy:
         print item
+
+### Note
+
+##### parameters
+When client calls a RPC function, the parameters can be:
+
+* all value types that can be pickled, including containers
+* proxy object that corresponding to server object
+* tuple, list, dict which contains proxy object
+
+If the type of parameter is not supported, the client will raise a TypeError.

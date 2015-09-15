@@ -5,6 +5,7 @@ import select
 import socket
 import pickle
 import traceback
+import collections
 
 import config
 import netref
@@ -89,6 +90,7 @@ class Connection(object):
                 self.__sock = socket.create_connection(server_address, timeout=1)
                 if self.__sock:
                     self.__connected = True
+                    print 'connected'
                     break
             except socket.timeout:
                 print 'timeout'
@@ -114,34 +116,54 @@ class Connection(object):
     # start
     # ...
     def send_request(self, action_type, data):
-        res = self.__send(MSG_REQUEST, self.__seq_num, action_type, data, True)
+        boxed_data = self.__box_request(data)
+        res = self.__send(MSG_REQUEST, self.__seq_num, action_type, boxed_data)
         if res > 0:
             self.__seq_num += 1
         return res
 
     def send_reply(self, seq_num, action_type, data):
-        return self.__send(MSG_REPLY, seq_num, action_type, data, False)
+        boxed_data = self.__box_reply(data)
+        return self.__send(MSG_REPLY, seq_num, action_type, boxed_data)
 
     def send_shutdown(self):
         try:
-            return self.__send(MSG_SHUTDOWN, 0, 0, 0, False)
+            return self.__send(MSG_SHUTDOWN, 0, 0, 0)
         except socket.error:
             return -1
 
     def send_exception(self, seq_num, data):
-        pickled_data = pickle.dumps((MSG_EXCEPTION, seq_num, 0, data))
-        self.__sock.sendall(pickled_data)
+        self.__send(MSG_EXCEPTION, seq_num, 0, data)
         return seq_num
 
-    def __send(self, msg_type, seq_num, action_type, data, unpick_dl):
+    def __send(self, msg_type, seq_num, action_type, data):
         if self.__connected == False:
             return -1
-        pickled_data = pickle.dumps((msg_type, seq_num, action_type,
-            self.__box(data, unpick_dl)))
+        try:
+            pickled_data = pickle.dumps((msg_type, seq_num, action_type, data))
+        except:
+            print 'data cannot be pickled'
+            raise
         self.__sock.sendall(pickled_data)
         return seq_num
 
-    def __box(self, obj, unpick_dl):
+    def __box_request(self, obj):
+        if obj is NotImplemented:     # pickle cannot dump NotImplemented
+            return LABEL_NOTIMPLEMENTED, None
+        elif obj is Ellipsis:           # pickle cannot dump Ellipsis
+            return LABEL_ELLIPSIS, None
+        elif type(obj) is tuple:
+            return LABEL_TUPLE, tuple(self.__box_request(item) for item in obj)
+        elif type(obj) is list:
+            return LABEL_LIST, tuple(self.__box_request(item) for item in obj)
+        elif type(obj) is dict:
+            return LABEL_DICT, tuple(self.__box_request(item) for item in obj.items())
+        elif isinstance(obj, netref.NetRef) and obj.____conn__ is self:
+            return LABEL_LOCAL_REF, obj.____oid__
+        else:
+            return LABEL_VALUE, obj
+
+    def __box_reply(self, obj):
         if type(obj) in simple_types:
             return LABEL_VALUE, obj
         elif obj is NotImplemented:     # pickle cannot dump NotImplemented
@@ -149,13 +171,7 @@ class Connection(object):
         elif obj is Ellipsis:           # pickle cannot dump Ellipsis
             return LABEL_ELLIPSIS, None
         elif type(obj) is tuple:
-            return LABEL_TUPLE, tuple(self.__box(item, unpick_dl) for item in obj)
-        elif type(obj) is list and unpick_dl:
-            return LABEL_LIST, tuple(self.__box(item, unpick_dl) for item in obj)
-        elif type(obj) is dict and unpick_dl:
-            return LABEL_DICT, tuple(self.__box(item, unpick_dl) for item in obj.items())
-        elif isinstance(obj, netref.NetRef) and obj.____conn__ is self:
-            return LABEL_LOCAL_REF, obj.____oid__
+            return LABEL_TUPLE, tuple(self.__box_reply(item) for item in obj)
         else:
             self.__local_objects.add(obj)
             try:
@@ -182,14 +198,16 @@ class Connection(object):
             # 接收全部数据
             ready = select.select([self.__sock], [], [], 0)
             while ready[0]:
+                print 1
                 rest_data = self.__sock.recv(self.__buffer_size)
                 if rest_data is None:
                     break
                 pickled_data = "".join([pickled_data, rest_data])
-                ready = select.select([self.__sock], [self.__sock], [], 0)
+                ready = select.select([self.__sock], [], [], 0)
 
             msg_type, seq_num, action_type, data = pickle.loads(pickled_data)
             try:
+                unboxed_data = None
                 if msg_type == MSG_REQUEST:
                     unboxed_data = self.__unbox(data, True)
                 elif msg_type == MSG_REPLY:
