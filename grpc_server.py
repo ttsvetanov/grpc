@@ -49,6 +49,9 @@ class GrpcServer(object):
         print 'foo'
         return 'foo'
 
+    def p(self, arg):
+        print arg
+
     def serve_forever(self, mode=PASSIVE_MODE):
         if self.__serve == False:
             self.__mode = mode

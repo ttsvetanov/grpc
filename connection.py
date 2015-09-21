@@ -198,7 +198,6 @@ class Connection(object):
             # 接收全部数据
             ready = select.select([self.__sock], [], [], 0)
             while ready[0]:
-                print 1
                 rest_data = self.__sock.recv(self.__buffer_size)
                 if rest_data is None:
                     break
@@ -224,6 +223,7 @@ class Connection(object):
 
     def __unbox(self, package, unpick_dl):
         label, value = package
+        print package
         if label == LABEL_VALUE:
             return value
         elif label == LABEL_TUPLE:
