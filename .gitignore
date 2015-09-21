@@ -61,3 +61,6 @@ target/
 
 # log file
 grpc_log.txt
+
+# symbol link
+libpickle/picklingtools
