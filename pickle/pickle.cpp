@@ -23,6 +23,16 @@ using namespace std;
 
 namespace {
 
+    int dump(lua_State *L) {
+        /* there is a table in stack, box it */
+        Val data_val = box(L);
+        Array<char> data_arr;
+        DumpValToArray(data_val, data_arr);
+
+        lua_pushstring(L, data_arr.data());
+        return 1;
+    }
+
     int load(lua_State *L) {
         /* convert data stream to val */
         const char * data_stream = lua_tostring(L, 1);
@@ -34,6 +44,40 @@ namespace {
         LoadValFromArray(data_arr, data_val);
 
         unbox(L, data_val);
+        return 1;
+    }
+
+    /* the second box
+     * convert lua type to python type recursive
+     * retain label
+     * then dump() serialize it to data stream
+     */
+    Val box(lua_State *L, int index) {
+        Val res;
+        if (lua_isnoneornil(L, index)) // invalid index or nil
+            return res;
+        else if (lua_isboolean(L, index))
+            res = lua_toboolean(L, index);
+        else if (lua_isinteger(L, index))
+            res = lua_tointeger(L, index);
+        else if (lua_isnumber(L, index))
+            res = lua_tonumber(L, index);
+        else if (lua_isstring(L, index))
+            res = lua_tostring(L, index);
+
+        // actually, there is no table, all table has
+        // been convert to NerRef. the tables here is
+        // just Tuple.
+        else if (lua_istable(L, index)) {
+            lua_pushnil(L);
+            Arr a;
+            while (lua_next(L, index) != 0) {
+                a.append(box(L, lua_gettop(L)));
+                lua_pop(L, 1);
+            }
+            res = a;
+        }
+        return res;
     }
 
     /* the first unbox
@@ -129,4 +173,15 @@ namespace {
                 break;
         }
     }
+
+    const struct luaL_reg lib[] = {
+        {"dump", dump},
+        {"load", load},
+        {NULL, NULL}
+    }
+}
+
+int luaopen_pickle (lua_State *L) {
+    luaL_newlib(L, lib);
+    return 1;
 }
