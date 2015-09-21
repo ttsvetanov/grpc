@@ -15,17 +15,20 @@
  *
  * =====================================================================================
  */
-#include <cstdlib>
 #include <lua.hpp>
 #include <chooseser.h>
 
 using namespace std;
 
 namespace {
+    int dump(lua_State *L);
+    int load(lua_State *L);
+    Val box(lua_State *L, int index);
+    void unbox(lua_State *L, Val data_val);
 
     int dump(lua_State *L) {
         /* there is a table in stack, box it */
-        Val data_val = box(L);
+        Val data_val = box(L, lua_gettop(L));
         Array<char> data_arr;
         DumpValToArray(data_val, data_arr);
 
@@ -58,8 +61,6 @@ namespace {
             return res;
         else if (lua_isboolean(L, index))
             res = lua_toboolean(L, index);
-        else if (lua_isinteger(L, index))
-            res = lua_tointeger(L, index);
         else if (lua_isnumber(L, index))
             res = lua_tonumber(L, index);
         else if (lua_isstring(L, index))
@@ -99,9 +100,11 @@ namespace {
             case 'd':
             case 'q':
             case 'Q':
-                lua_Number n = data_val; //lua_Number is double by default
-                lua_pushnumber(L, n);
-                break;
+                {
+                    lua_Number n = data_val; //lua_Number is double by default
+                    lua_pushnumber(L, n);
+                    break;
+                }
 
             // python complex --> ignored
             case 'F':
@@ -115,57 +118,65 @@ namespace {
 
             // python tuple --> lua table
             case 'u':
-                // create a table in top of stack
-                lua_newtable(L);
-                int table_index = lua_gettop(L);
-                Arr val_arr = data_val;
-                // for each val in array, unbox it.
-                // the unbox automatic push the result in top
-                // of the stack.
-                // then insert the (i, val) into the table we just created.
-                for (int i = 0; i < val_arr.length(); i++) {
-                    lua_pushnumber(L, i+1); // the table index start from 1
-                    unbox(L, val_arr[i]);
-                    lua_settable(L, table_index);
+                {
+                    // create a table in top of stack
+                    lua_newtable(L);
+                    int table_index = lua_gettop(L);
+                    Arr val_arr = data_val;
+                    // for each val in array, unbox it.
+                    // the unbox automatic push the result in top
+                    // of the stack.
+                    // then insert the (i, val) into the table we just created.
+                    for (int i = 0; i < val_arr.length(); i++) {
+                        lua_pushnumber(L, i+1); // the table index start from 1
+                        unbox(L, val_arr[i]);
+                        lua_settable(L, table_index);
+                    }
+                    break;
                 }
-                break;
 
             // python list --> lua table
             case 'n':
-                // just like the tuple
-                lua_newtable(L);
-                int table_index = lua_gettop(L);
-                Arr val_arr = data_val;
-                for (int i = 0; i < val_arr.length(); i++) {
-                    lua_pushnumber(L, i+1);
-                    unbox(L, val_arr[i]);
-                    lua_settable(L, table_index);
+                {
+                    // just like the tuple
+                    lua_newtable(L);
+                    int table_index = lua_gettop(L);
+                    Arr val_arr = data_val;
+                    for (int i = 0; i < val_arr.length(); i++) {
+                        lua_pushnumber(L, i+1);
+                        unbox(L, val_arr[i]);
+                        lua_settable(L, table_index);
+                    }
+                    break;
                 }
-                break;
 
             // python dict --> lua table
             case 't':
-                lua_newtable(L);
-                int table_index = lua_gettop(L);
-                Tab val_tab = data_val;
-                for (It ii(val_tab); ii(); ) {
-                    unbox(L, ii.key());
-                    unbox(L, ii.value());
-                    lua_settable(L, table_index);
+                {
+                    lua_newtable(L);
+                    int table_index = lua_gettop(L);
+                    Tab val_tab = data_val;
+                    for (It ii(val_tab); ii(); ) {
+                        unbox(L, ii.key());
+                        unbox(L, ii.value());
+                        lua_settable(L, table_index);
+                    }
+                    break;
                 }
-                break;
 
             //python ordereddict --> lua table
             case 'o':
-                lua_newtable(L);
-                int table_index = lua_gettop(L);
-                OTab val_otab = data_val;
-                for (It ii(val_otab); ii();) {
-                    unbox(L, ii.key());
-                    unbox(L, ii.value());
-                    lua_settable(L, table_index);
+                {
+                    lua_newtable(L);
+                    int table_index = lua_gettop(L);
+                    OTab val_otab = data_val;
+                    for (It ii(val_otab); ii();) {
+                        unbox(L, ii.key());
+                        unbox(L, ii.value());
+                        lua_settable(L, table_index);
+                    }
+                    break;
                 }
-                break;
 
             // python None --> lua nil
             case 'Z':
@@ -174,14 +185,15 @@ namespace {
         }
     }
 
-    const struct luaL_reg lib[] = {
+    const struct luaL_Reg libpickle[] = {
         {"dump", dump},
         {"load", load},
         {NULL, NULL}
-    }
+    };
+
 }
 
-int luaopen_pickle (lua_State *L) {
-    luaL_newlib(L, lib);
+extern "C" int luaopen_libpickle (lua_State *L) {
+    luaL_newlib(L, libpickle);
     return 1;
 }
