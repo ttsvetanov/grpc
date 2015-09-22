@@ -5,29 +5,29 @@ import logging
 import select
 import pickle
 
-import config
+from config import config
 import connection
 
 
 class GrpcClient(object):
     def __init__(self):
         self.__server_proxy = None
-        self.__conn = connection.Connection(config.CLIENT_BUFFER_SIZE)
+        self.__conn = connection.Connection(int(config.client.buf_size))
 
     @property
     def server_proxy(self):
         if self.__server_proxy is None:
-            self.__server_proxy = self.__conn.sync_request(connection.ACTION_GETSERVERPROXY)
+            self.__server_proxy = self.__conn.sync_request(config.action.serverproxy)
         return self.__server_proxy
 
     @property
     def connected(self):
-        return self.__conn.__connected
+        return self.__conn.connected
 
     def __del__(self):
         self.shutdown()
 
-    def connect(self, server_address=config.DEFAULT_SERVER_ADDRESS):
+    def connect(self, server_address=(config.server.addr, int(config.server.port))):
         res = self.__conn.connect(server_address)
         self.__server_proxy = None
 

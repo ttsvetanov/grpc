@@ -7,50 +7,10 @@ import pickle
 import traceback
 import collections
 
-import config
 import netref
 import utils
+from config import config
 
-
-# MSG_TYPE
-MSG_REQUEST = 1
-MSG_REPLY = 2
-MSG_EXCEPTION = 3
-MSG_SHUTDOWN = 4
-msg_str = ('msg type str', 'request', 'reply', 'exception', 'shutdown')
-
-# Action_Type
-ACTION_GETATTR = 1
-ACTION_SETATTR = 2
-ACTION_DELATTR = 3
-ACTION_STR = 4
-ACTION_REPR = 5
-ACTION_CALL = 6
-ACTION_GETSERVERPROXY = 7
-ACTION_DIR = 8
-ACTION_CMP = 9
-ACTION_HASH = 10
-ACTION_DEL = 11
-ACTION_CONTAINS = 12
-ACTION_DELITEM = 13
-ACTION_GETITEM = 14
-ACTION_ITER = 15
-ACTION_LEN = 16
-ACTION_SETITEM = 17
-ACTION_NEXT = 18
-action_str = ('action type str', 'getattr', 'setattr', 'delattr', 
-        'str', 'repr', 'call', 'server_proxy', 'dir', 'cmp', 'hash', 'del',
-        'contains', 'delitem', 'getitem', 'iter', 'len', 'setitem', 'next')
-
-# obj label
-LABEL_VALUE = 1
-LABEL_TUPLE = 2
-LABEL_LOCAL_REF = 3
-LABEL_REMOTE_REF = 4
-LABEL_NOTIMPLEMENTED = 5
-LABEL_ELLIPSIS = 6
-LABEL_LIST = 7
-LABEL_DICT = 8
 
 simple_types = frozenset([type(None), int, long, bool, float, str, unicode, complex])
 
@@ -117,23 +77,23 @@ class Connection(object):
     # ...
     def send_request(self, action_type, data):
         boxed_data = self.__box_request(data)
-        res = self.__send(MSG_REQUEST, self.__seq_num, action_type, boxed_data)
+        res = self.__send(config.msg.request, self.__seq_num, action_type, boxed_data)
         if res > 0:
             self.__seq_num += 1
         return res
 
     def send_reply(self, seq_num, action_type, data):
         boxed_data = self.__box_reply(data)
-        return self.__send(MSG_REPLY, seq_num, action_type, boxed_data)
+        return self.__send(config.msg.reply, seq_num, action_type, boxed_data)
 
     def send_shutdown(self):
         try:
-            return self.__send(MSG_SHUTDOWN, 0, 0, 0)
+            return self.__send(config.msg.shutdown, 0, 0, 0)
         except socket.error:
             return -1
 
     def send_exception(self, seq_num, data):
-        self.__send(MSG_EXCEPTION, seq_num, 0, data)
+        self.__send(config.msg.exception, seq_num, 0, data)
         return seq_num
 
     def __send(self, msg_type, seq_num, action_type, data):
@@ -149,36 +109,36 @@ class Connection(object):
 
     def __box_request(self, obj):
         if obj is NotImplemented:     # pickle cannot dump NotImplemented
-            return LABEL_NOTIMPLEMENTED, None
+            return config.label.notimplemented, None
         elif obj is Ellipsis:           # pickle cannot dump Ellipsis
-            return LABEL_ELLIPSIS, None
+            return config.label.ellipsis, None
         elif type(obj) is tuple:
-            return LABEL_TUPLE, tuple(self.__box_request(item) for item in obj)
+            return config.label.tuple, tuple(self.__box_request(item) for item in obj)
         elif type(obj) is list:
-            return LABEL_LIST, tuple(self.__box_request(item) for item in obj)
+            return config.label.list, tuple(self.__box_request(item) for item in obj)
         elif type(obj) is dict:
-            return LABEL_DICT, tuple(self.__box_request(item) for item in obj.items())
+            return config.label.dict, tuple(self.__box_request(item) for item in obj.items())
         elif isinstance(obj, netref.NetRef) and obj.____conn__ is self:
-            return LABEL_LOCAL_REF, obj.____oid__
+            return config.label.local_ref, obj.____oid__
         else:
-            return LABEL_VALUE, obj
+            return config.label.value, obj
 
     def __box_reply(self, obj):
         if type(obj) in simple_types:
-            return LABEL_VALUE, obj
+            return config.label.value, obj
         elif obj is NotImplemented:     # pickle cannot dump NotImplemented
-            return LABEL_NOTIMPLEMENTED, None
+            return config.label.notimplemented, None
         elif obj is Ellipsis:           # pickle cannot dump Ellipsis
-            return LABEL_ELLIPSIS, None
+            return config.label.ellipsis, None
         elif type(obj) is tuple:
-            return LABEL_TUPLE, tuple(self.__box_reply(item) for item in obj)
+            return config.label.tuple, tuple(self.__box_reply(item) for item in obj)
         else:
             self.__local_objects.add(obj)
             try:
                 cls = obj.__class__
             except:
                 cls = type(obj)
-            return LABEL_REMOTE_REF, (id(obj), cls.__name__, cls.__module__)
+            return config.label.remote_ref, (id(obj), cls.__name__, cls.__module__)
     # ...
     # end
     # send functions
@@ -207,13 +167,13 @@ class Connection(object):
             msg_type, seq_num, action_type, data = pickle.loads(pickled_data)
             try:
                 unboxed_data = None
-                if msg_type == MSG_REQUEST:
+                if msg_type == config.msg.request:
                     unboxed_data = self.__unbox(data, True)
-                elif msg_type == MSG_REPLY:
+                elif msg_type == config.msg.reply:
                     unboxed_data = self.__unbox(data, False)
-                elif msg_type == MSG_EXCEPTION:
+                elif msg_type == config.msg.exception:
                     unboxed_data = data
-                elif msg_type == MSG_SHUTDOWN:
+                elif msg_type == config.msg.shutdown:
                     self.shutdown()
                 return msg_type, seq_num, action_type, unboxed_data
             except KeyError:
@@ -224,26 +184,26 @@ class Connection(object):
     def __unbox(self, package, unpick_dl):
         label, value = package
         print package
-        if label == LABEL_VALUE:
+        if label == config.label.value:
             return value
-        elif label == LABEL_TUPLE:
+        elif label == config.label.tuple:
             return tuple(self.__unbox(item, unpick_dl) for item in value)
-        elif label == LABEL_LIST and unpick_dl:
+        elif label == config.label.list and unpick_dl:
             return list(self.__unbox(item, unpick_dl) for item in value)
-        elif label == LABEL_DICT and unpick_dl:
+        elif label == config.label.dict and unpick_dl:
             return dict(self.__unbox(item, unpick_dl) for item in value)
-        elif label == LABEL_NOTIMPLEMENTED:
+        elif label == config.label.notimplemented:
             return NotImplemented
-        elif label == LABEL_ELLIPSIS:
+        elif label == config.label.ellipsis:
             return Ellipsis
-        elif label == LABEL_LOCAL_REF:
+        elif label == config.label.local_ref:
             try:
                 obj = self.__local_objects[value]
             except KeyError:
                 raise
             else:
                 return obj
-        elif label == LABEL_REMOTE_REF:
+        elif label == config.label.remote_ref:
             oid, clsname, modname = value
             if oid in self.__proxy_cache:
                 return self.__proxy_cache[oid]
@@ -271,7 +231,7 @@ class Connection(object):
         if seq_num < 0:
             return None
         msg_type, recv_seq_num, action_type, recv_data = self.recv()
-        if ((msg_type == MSG_REPLY or msg_type == MSG_EXCEPTION)
+        if ((msg_type == config.msg.reply or msg_type == config.msg.exception)
                 and recv_seq_num == seq_num):
             return recv_data
         return None

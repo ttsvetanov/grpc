@@ -7,12 +7,9 @@ import threading
 import traceback
 import select
 
-import config
+from config import config
 import connection
 
-# server mode
-ACTIVE_MODE = 1
-PASSIVE_MODE = 2
 
 class ModuleNamespace(object):
     #__slots__ = ["__getmodule", "__cache"]
@@ -30,13 +27,13 @@ class ModuleNamespace(object):
 
 
 class GrpcServer(object):
-    def __init__(self, server_port = config.DEFAULT_SERVER_PORT):
+    def __init__(self, server_port = int(config.server.port)):
         self.__server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.__server_sock.bind(('localhost', server_port))
         self.__server_sock.listen(5)
         self.modules = ModuleNamespace(self.__get_module)
-        self.__mode = PASSIVE_MODE
+        self.__mode = config.server.passive_mode
         self.__conns = []
         self.__conns_lock = threading.Lock()
         self.__serve = False
@@ -52,18 +49,18 @@ class GrpcServer(object):
     def p(self, arg):
         print arg
 
-    def serve_forever(self, mode=PASSIVE_MODE):
+    def serve_forever(self, mode=config.server.passive_mode):
         if self.__serve == False:
             self.__mode = mode
             self.__serve = True
-            if self.__mode == ACTIVE_MODE:
+            if self.__mode == config.server.active_mode:
                 t = threading.Thread(target=self.__handle_request_active)
                 t.start()
             while self.__serve:
                 ready = select.select([self.__server_sock], [], [], 0.5)
                 for s in ready[0]:
                     if s is self.__server_sock:
-                        conn = connection.Connection(config.SERVER_BUFFER_SIZE)
+                        conn = connection.Connection(int(config.server.buf_size))
                         client_addr = conn.accept(self.__server_sock)
                         print 'Hello, ', client_addr
                         self.__conns_lock.acquire()
@@ -98,52 +95,52 @@ class GrpcServer(object):
 
     def __handle_request_once(self, index):
         conn = self.__conns[index]
-        wait = -1 if self.__mode == ACTIVE_MODE else 0
+        wait = -1 if self.__mode == config.server.active_mode else 0
         res = conn.recv(timeout=wait)
         if res is None:
             return res
         msg_type, seq_num, action_type, data = res
-        print (connection.msg_str[msg_type], seq_num,
-                connection.action_str[action_type], data)
+        print (getattr(config.msg_str, msg_type), seq_num,
+                getattr(config.action_str, action_type), data)
         res = None
-        if msg_type == connection.MSG_REQUEST:
-            if action_type == connection.ACTION_GETATTR:
+        if msg_type == config.msg.request:
+            if action_type == config.action.getattr:
                 res = self.__handle_getattr(data)
-            elif action_type == connection.ACTION_SETATTR:
+            elif action_type == config.action.setattr:
                 res = self.__handle_setattr(data)
-            elif action_type == connection.ACTION_DELATTR:
+            elif action_type == config.action.delattr:
                 res = self.__handle_delattr(data)
-            elif action_type == connection.ACTION_STR:
+            elif action_type == config.action.str:
                 res = self.__handle_str(data)
-            elif action_type == connection.ACTION_REPR:
+            elif action_type == config.action.repr:
                 res = self.__handle_repr(data)
-            elif action_type == connection.ACTION_GETSERVERPROXY:
+            elif action_type == config.action.serverproxy:
                 res = self.__handle_get_server_proxy(data)
-            elif action_type == connection.ACTION_CALL:
+            elif action_type == config.action.call:
                 res = self.__handle_call(data)
-            elif action_type == connection.ACTION_DIR:
+            elif action_type == config.action.dir:
                 res = self.__handle_dir(data)
-            elif action_type == connection.ACTION_CMP:
+            elif action_type == config.action.cmp:
                 res = self.__handle_cmp(data)
-            elif action_type == connection.ACTION_HASH:
+            elif action_type == config.action.hash:
                 res = self.__handle_hash(data)
-            elif action_type == connection.ACTION_DEL:
+            elif action_type == config.action.delete:
                 res = self.__handle_del(conn, data)
-            elif action_type == connection.ACTION_CONTAINS:
+            elif action_type == config.action.contains:
                 res = self.__handle_contains(data)
-            elif action_type == connection.ACTION_DELITEM:
+            elif action_type == config.action.delitem:
                 res = self.__handle_delitem(data)
-            elif action_type == connection.ACTION_GETITEM:
+            elif action_type == config.action.getitem:
                 res = self.__handle_getitem(data)
-            elif action_type == connection.ACTION_ITER:
+            elif action_type == config.action.iter:
                 res = self.__handle_iter(data)
-            elif action_type == connection.ACTION_LEN:
+            elif action_type == config.action.len:
                 res = self.__handle_len(data)
-            elif action_type == connection.ACTION_SETITEM:
+            elif action_type == config.action.setitem:
                 res = self.__handle_setitem(data)
-            elif action_type == connection.ACTION_NEXT:
+            elif action_type == config.action.next:
                 res = self.__handle_next(data)
-        elif msg_type == connection.MSG_SHUTDOWN:
+        elif msg_type == config.msg.shutdown:
             print 'Bye, ', conn
             self.__conns.pop(index)
         if isinstance(res, Exception):
@@ -251,4 +248,4 @@ class GrpcServer(object):
 
 if __name__ == '__main__':
     server = GrpcServer()
-    server.serve_forever(ACTIVE_MODE)
+    server.serve_forever(config.server.active_mode)
