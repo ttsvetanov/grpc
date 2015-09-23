@@ -27,7 +27,7 @@ class ModuleNamespace(object):
 
 
 class GrpcServer(object):
-    def __init__(self, server_port = int(config.server.port)):
+    def __init__(self, server_port = config.server.port):
         self.__server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.__server_sock.bind(('localhost', server_port))
@@ -60,7 +60,7 @@ class GrpcServer(object):
                 ready = select.select([self.__server_sock], [], [], 0.5)
                 for s in ready[0]:
                     if s is self.__server_sock:
-                        conn = connection.Connection(int(config.server.buf_size))
+                        conn = connection.Connection(config.server.buf_size)
                         client_addr = conn.accept(self.__server_sock)
                         print 'Hello, ', client_addr
                         self.__conns_lock.acquire()
@@ -100,8 +100,8 @@ class GrpcServer(object):
         if res is None:
             return res
         msg_type, seq_num, action_type, data = res
-        print (getattr(config.msg_str, msg_type), seq_num,
-                getattr(config.action_str, action_type), data)
+        print config.msg_str[msg_type], seq_num, config.action_str[action_type]
+        print data
         res = None
         if msg_type == config.msg.request:
             if action_type == config.action.getattr:
@@ -115,7 +115,7 @@ class GrpcServer(object):
             elif action_type == config.action.repr:
                 res = self.__handle_repr(data)
             elif action_type == config.action.serverproxy:
-                res = self.__handle_get_server_proxy(data)
+                res = self.__handle_serverproxy(data)
             elif action_type == config.action.call:
                 res = self.__handle_call(data)
             elif action_type == config.action.dir:
@@ -173,7 +173,7 @@ class GrpcServer(object):
         obj = data
         return repr(obj)
 
-    def __handle_get_server_proxy(self, data):
+    def __handle_serverproxy(self, data):
         return self
 
     def __handle_call(self, data):

@@ -14,7 +14,11 @@ class Section(object):
         if name == '_Section__cp' or name == '_Section__sec_name':
             return object.__getattribute__(self, name)
         if name in self.__cp.options(self.__sec_name):
-            return self.__cp.get(self.__sec_name, name)
+            value = self.__cp.get(self.__sec_name, name)
+            try:
+                return int(value)
+            except ValueError:
+                return value
         else:
             return object.__getattribute__(self, name)
 
@@ -32,7 +36,10 @@ class Config(object):
             return object.__getattribute__(self, name)
 
 config = Config()
-print 'config created'
+config.msg_str = ('msg_str', 'Request', 'Reply', 'Exception', 'Shutdown')
+config.action_str = ('action_str', 'getattr', 'setattr', 'delattr', 'str',
+            'repr', 'call', 'serverproxy', 'dir', 'cmp', 'hash', 'del', 'contains',
+            'delitem', 'getitem', 'iter', 'len', 'setitem', 'next')
 
 _LOG_FILE = os.path.join(os.getcwd(), config.server.log_file)
 _LOG_LEVEL = logging.DEBUG

@@ -118,33 +118,19 @@ namespace {
 
             // python tuple --> lua table
             case 'u':
+            // python list --> lua table
+            case 'n':
                 {
                     // create a table in top of stack
                     lua_newtable(L);
                     int table_index = lua_gettop(L);
-                    Arr val_arr = data_val;
-                    // for each val in array, unbox it.
+                    // for each val in data_val array, unbox it.
                     // the unbox automatic push the result in top
                     // of the stack.
                     // then insert the (i, val) into the table we just created.
-                    for (int i = 0; i < val_arr.length(); i++) {
+                    for (int i = 0; i < data_val.length(); i++) {
                         lua_pushnumber(L, i+1); // the table index start from 1
-                        unbox(L, val_arr[i]);
-                        lua_settable(L, table_index);
-                    }
-                    break;
-                }
-
-            // python list --> lua table
-            case 'n':
-                {
-                    // just like the tuple
-                    lua_newtable(L);
-                    int table_index = lua_gettop(L);
-                    Arr val_arr = data_val;
-                    for (int i = 0; i < val_arr.length(); i++) {
-                        lua_pushnumber(L, i+1);
-                        unbox(L, val_arr[i]);
+                        unbox(L, data_val[i]);
                         lua_settable(L, table_index);
                     }
                     break;

@@ -96,15 +96,18 @@ class Connection(object):
         self.__send(config.msg.exception, seq_num, 0, data)
         return seq_num
 
-    def __send(self, msg_type, seq_num, action_type, data):
+    def __send(self, msg_type, seq_num, action_type, boxed_data):
         if self.__connected == False:
             return -1
         try:
-            pickled_data = pickle.dumps((msg_type, seq_num, action_type, data))
+            pickled_data = pickle.dumps((msg_type, seq_num, action_type, boxed_data))
         except:
             print 'data cannot be pickled'
             raise
-        self.__sock.sendall(pickled_data)
+        data_size = len(pickled_data)
+        if data_size > 99999999:
+            raise ValueError, 'data size is too large'
+        self.__sock.sendall(str(data_size).zfill(8) + pickled_data)
         return seq_num
 
     def __box_request(self, obj):
@@ -146,44 +149,50 @@ class Connection(object):
     # recv functions
     # start
     # ...
-    def recv(self, timeout = -1.0):
+    def recv(self, timeout = None):
         if self.__connected == False:
             return None
-        if timeout < 0:
-            ready = select.select([self.__sock], [], []);
-        else:
-            ready = select.select([self.__sock], [], [], timeout);
-        if ready[0]:
-            pickled_data = self.__sock.recv(self.__buffer_size)
-            # 接收全部数据
-            ready = select.select([self.__sock], [], [], 0)
-            while ready[0]:
-                rest_data = self.__sock.recv(self.__buffer_size)
-                if rest_data is None:
-                    break
-                pickled_data = "".join([pickled_data, rest_data])
-                ready = select.select([self.__sock], [], [], 0)
+        data_size = 0
+        recvd_size = 0
 
-            msg_type, seq_num, action_type, data = pickle.loads(pickled_data)
-            try:
-                unboxed_data = None
-                if msg_type == config.msg.request:
-                    unboxed_data = self.__unbox(data, True)
-                elif msg_type == config.msg.reply:
-                    unboxed_data = self.__unbox(data, False)
-                elif msg_type == config.msg.exception:
-                    unboxed_data = data
-                elif msg_type == config.msg.shutdown:
-                    self.shutdown()
-                return msg_type, seq_num, action_type, unboxed_data
-            except KeyError:
-                # send 'object has been del'
-                pass
+        # get data size
+        ready = select.select([self.__sock], [], [], timeout);
+        if ready[0]:
+            data_size = int(self.__sock.recv(8))
+        else:
+            return None
+
+        # get data
+        pickled_data = ""
+        while data_size > recvd_size:
+            ready = select.select([self.__sock], [], [], 1.0);
+            if ready[0]:
+                rest_data = self.__sock.recv(self.__buffer_size)
+                if rest_data is None:   # peer closed
+                    return None
+                recvd_size += len(rest_data)
+                pickled_data = "".join([pickled_data, rest_data])
+                
+        # unbox data
+        msg_type, seq_num, action_type, data = pickle.loads(pickled_data)
+        try:
+            unboxed_data = None
+            if msg_type == config.msg.request:
+                unboxed_data = self.__unbox(data, True)
+            elif msg_type == config.msg.reply:
+                unboxed_data = self.__unbox(data, False)
+            elif msg_type == config.msg.exception:
+                unboxed_data = data
+            elif msg_type == config.msg.shutdown:
+                self.shutdown()
+            return msg_type, seq_num, action_type, unboxed_data
+        except KeyError:
+            # send 'object has been del'
+            pass
         return None
 
     def __unbox(self, package, unpick_dl):
         label, value = package
-        print package
         if label == config.label.value:
             return value
         elif label == config.label.tuple:
@@ -219,6 +228,7 @@ class Connection(object):
         cls = netref.class_factory(clsname, modname)
         self.__netref_classes_cache[typeinfo] = cls
         return cls(self, oid)
+
     # ...
     # end
     # recv functions

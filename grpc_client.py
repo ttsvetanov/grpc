@@ -12,7 +12,7 @@ import connection
 class GrpcClient(object):
     def __init__(self):
         self.__server_proxy = None
-        self.__conn = connection.Connection(int(config.client.buf_size))
+        self.__conn = connection.Connection(config.client.buf_size)
 
     @property
     def server_proxy(self):
@@ -27,7 +27,7 @@ class GrpcClient(object):
     def __del__(self):
         self.shutdown()
 
-    def connect(self, server_address=(config.server.addr, int(config.server.port))):
+    def connect(self, server_address=(config.server.addr, config.server.port)):
         res = self.__conn.connect(server_address)
         self.__server_proxy = None
 

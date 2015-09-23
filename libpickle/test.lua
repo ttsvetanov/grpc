@@ -25,13 +25,10 @@ function print_lua_table (lua_table, indent)
 		end
 	end
 end
+
 do
-    local pickle = require("libpickle")
-    local a = 'string'
-    local b = {1, a}
-    local c = {2, b, a}
-    local d = {c, a, b}
-    local res = pickle.dump(d)
-    local e = pickle.load(res)
+    local lip = require("LIP")
+    local e = lip.load("../config.ini")
     print_lua_table(e)
+    print(e.server.port)
 end
