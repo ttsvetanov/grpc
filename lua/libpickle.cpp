@@ -76,6 +76,13 @@ namespace {
                 a.append(box(L, lua_gettop(L)));
                 lua_pop(L, 1);
             }
+            // this is because the while loop stops
+            // when lua_next reaches nil.
+            // but after the first box, all table size
+            // is not less then two.
+            if (a.length() == 1) {
+                a.append(Eval("None"));
+            }
             res = a;
         }
         return res;

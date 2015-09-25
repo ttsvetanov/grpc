@@ -181,10 +181,11 @@ class GrpcServer(object):
         res = None
         try:
             res = func(*args, **kwargs)
-        except:
+            return res
+        except Exception as e:
             logging.error("__handle_call error. function:{}".format(str(func)))
             traceback.print_exc()
-        return res
+            return e
 
     def __handle_dir(self, data):
         obj = data

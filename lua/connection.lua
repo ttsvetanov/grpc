@@ -5,6 +5,7 @@
 local socket = require("socket")
 local libpickle = require("libpickle")
 local lip = require("lip")
+local pnt = require("print")
 local config = lip.load("../config.ini")
 local Connection = {}
 
@@ -17,34 +18,6 @@ end
 local weak_value_metatbl = {}
 weak_value_metatbl.__mode = "v"
 
-local function print_lua_table (lua_table, indent)
-	indent = indent or 0
-	for k, v in pairs(lua_table) do
-		if type(k) == "string" then
-			k = string.format("%q", k)
-		end
-		local szSuffix = ""
-		if type(v) == "table" then
-			szSuffix = "{"
-		end
-		local szPrefix = string.rep("    ", indent)
-		formatting = szPrefix.."["..k.."]".." = "..szSuffix
-		if type(v) == "table" then
-			print(formatting)
-			print_lua_table(v, indent + 1)
-			print(szPrefix.."},")
-		else
-			local szValue = ""
-			if type(v) == "string" then
-				szValue = string.format("%q", v)
-			else
-				szValue = tostring(v)
-			end
-			print(formatting..szValue..",")
-		end
-	end
-end
-
 function Connection:new(o)
     o = o or {}
     setmetatable(o, self)
@@ -53,17 +26,17 @@ function Connection:new(o)
     o.__sock = nil
     o.__local_objects = {}
     o.__oid = 1
-    setmetatable(o.__local_objects, weak_value_metatbl)
+    --setmetatable(o.__local_objects, weak_value_metatbl)
     return o
 end
 
 function Connection:accept(server_sock)
     if not self.connected then
-        server_sock:settimeout(2)   -- in seconds
+        server_sock:settimeout(0)   -- in seconds
         self.__sock = server_sock:accept()
         if self.__sock ~= nil then
             self.connected = true
-            self.__sock:settimeout(1)
+            self.__sock:settimeout(0)
             return self.__sock:getpeername()
         end
     end
@@ -82,10 +55,18 @@ function Connection:send_reply(seq_num, action_type, data)
     return self:__send(config.msg.reply, seq_num, action_type, boxed_data)
 end
 
+function Connection:send_exception(seq_num, data)
+    self:__send(config.msg.exception, seq_num, 0, data)
+    return seq_num
+end
+
 function Connection:send_shutdown()
+    local status, res = pcall(self.__send, self, config.msg.shutdown, 0, 0, 0)
+    return res
 end
 
 function Connection:__send(msg_type, seq_num, action_type, boxed_data)
+    print(msg_type, seq_num, action_type, boxed_data)
     if self.connected == false then
         return -1
     end
@@ -98,17 +79,16 @@ function Connection:__send(msg_type, seq_num, action_type, boxed_data)
     return seq_num
 end
 
-function Connection:__box_request(obj)
-end
-
 function Connection:__box_reply(obj)
     if simple_types[type(obj)] then
         return {config.label.value, obj}
     else
-        obj.oid = self.__oid
+        local cache_item = {}
+        setmetatable(cache_item, weak_value_metatbl)
+        cache_item[self.__oid] = obj
+        self.__local_objects[self.__oid] = cache_item
         self.__oid = self.__oid + 1
-        self.__local_objects[obj.oid] = obj
-        return {config.label.remote_ref, {obj.oid, tostring(obj), tostring(obj)}}
+        return {config.label.remote_ref, {self.__oid-1, tostring(obj), tostring(obj)}}
     end
 end
 
@@ -126,14 +106,17 @@ function Connection:recv(timeout)
         local data_size, status = self.__sock:receive(8)
         if status == 'closed' then
             self:shutdown()
-            return nil
+            print 'shutdown'
+            return config.msg.shutdown
         end
         if status == 'timeout' and data == nil then
+            print 'data size timeout'
             return nil
         end
         data_size = tonumber(data_size)
         pickled_data, status = self.__sock:receive(data_size)
         if pickled_data == nil then
+            print 'pickle data is nil'
             return nil
         end
     end
@@ -146,12 +129,15 @@ function Connection:recv(timeout)
 
     if msg_type == config.msg.request then
         local status, unboxed_data = pcall(self.__unbox, self, data)
-        if status == nil then
+        if status == false then
             -- 'object has been del'
             return nil
         else
             return msg_type, seq_num, action_type, unboxed_data
         end
+    elseif msg_type == config.msg.shutdown then
+        self:shutdown()
+        return msg_type, seq_num, action_type, unboxed_data
     end
 end
 
@@ -173,7 +159,11 @@ function Connection:__unbox(package)
         end
         return res
     elseif label == config.label.local_ref then
-        return self.__local_objects[value]
+        res = self.__local_objects[value][value]
+        if res == nil then
+            self.__local_objects[value] = nil
+        end
+        return res
     end
 end
 

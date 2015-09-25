@@ -63,4 +63,4 @@ target/
 grpc_log.txt
 
 # symbol link
-libpickle/picklingtools
+lua/picklingtools

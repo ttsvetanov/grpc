@@ -6,6 +6,7 @@ import socket
 import pickle
 import traceback
 import collections
+import types
 
 import netref
 import utils
@@ -61,7 +62,10 @@ class Connection(object):
 
     def shutdown(self, flag = socket.SHUT_RDWR):
         if self.__connected:
-            self.__sock.shutdown(flag)
+            try:
+                self.__sock.shutdown(flag)
+            except:
+                pass
             self.__local_objects.clear()
             self.__proxy_cache = {}
             self.__netref_classes_cache = {}
@@ -241,9 +245,13 @@ class Connection(object):
         if seq_num < 0:
             return None
         msg_type, recv_seq_num, action_type, recv_data = self.recv()
-        if ((msg_type == config.msg.reply or msg_type == config.msg.exception)
-                and recv_seq_num == seq_num):
+        if msg_type == config.msg.reply and recv_seq_num == seq_num:
             return recv_data
+        if msg_type == config.msg.exception:
+            if isinstance(recv_data, Exception):
+                return recv_data
+            elif isinstance(recv_data, types.StringType):
+                return Exception(recv_data)
         return None
 
     @property

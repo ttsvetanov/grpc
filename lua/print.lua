@@ -1,4 +1,6 @@
-function print_lua_table (lua_table, indent)
+local Print = {}
+
+function Print.print_lua_table(lua_table, indent)
 	indent = indent or 0
 	for k, v in pairs(lua_table) do
 		if type(k) == "string" then
@@ -12,7 +14,7 @@ function print_lua_table (lua_table, indent)
 		formatting = szPrefix.."["..k.."]".." = "..szSuffix
 		if type(v) == "table" then
 			print(formatting)
-			print_lua_table(v, indent + 1)
+			Print.print_lua_table(v, indent + 1)
 			print(szPrefix.."},")
 		else
 			local szValue = ""
@@ -26,9 +28,4 @@ function print_lua_table (lua_table, indent)
 	end
 end
 
-do
-    local lip = require("LIP")
-    local e = lip.load("../config.ini")
-    print_lua_table(e)
-    print(e.server.port)
-end
+return Print
