@@ -60,7 +60,7 @@ target/
 *.swp
 
 # log file
-grpc_log.txt
+*.txt
 
 # symbol link
 lua/picklingtools

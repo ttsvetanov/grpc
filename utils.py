@@ -41,14 +41,10 @@ class CountDict(object):
             self.__lock.release()
 
     def __getitem__(self, key):
-        self.__lock.acquire()
-        try:
-            if self.__dict[key][0]:
-                return self.__dict[key][2]()
-            else:
-                return self.__dict[key][2]
-        finally:
-            self.__lock.release()
+        if self.__dict[key][0]:
+            return self.__dict[key][2]()
+        else:
+            return self.__dict[key][2]
 
     def __delitem__(self, key):
         self.__lock.acquire()

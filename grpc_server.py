@@ -6,6 +6,7 @@ import socket
 import threading
 import traceback
 import select
+import Queue
 
 from config import config
 import connection
@@ -33,14 +34,17 @@ class GrpcServer(object):
         self.__server_sock.bind(('localhost', server_port))
         self.__server_sock.listen(5)
         self.modules = ModuleNamespace(self.__get_module)
-        self.__mode = config.server.passive_mode
         self.__conns = []
         self.__conns_lock = threading.Lock()
         self.__serve = False
+        self.__serve_thread = threading.Thread(target=self.__serve_forever)
 
         self.test = 2
         self.d = {}
         self.l = []
+
+    def __del__(self):
+        self.shutdown()
 
     def foo(self):
         print 'foo'
@@ -49,104 +53,113 @@ class GrpcServer(object):
     def p(self, arg):
         print arg
 
-    def serve_forever(self, mode=config.server.passive_mode):
+    def start(self):
+        self.__serve_thread.start()
+
+    def __serve_forever(self):
         if self.__serve == False:
-            self.__mode = mode
             self.__serve = True
-            if self.__mode == config.server.active_mode:
-                t = threading.Thread(target=self.__handle_request_active)
-                t.start()
             while self.__serve:
                 ready = select.select([self.__server_sock], [], [], 0.5)
-                for s in ready[0]:
-                    if s is self.__server_sock:
-                        conn = connection.Connection(config.server.buf_size)
-                        client_addr = conn.accept(self.__server_sock)
-                        print 'Hello, ', client_addr
-                        self.__conns_lock.acquire()
-                        try:
-                            self.__conns.append(conn)
-                        finally:
-                            self.__conns_lock.release()
+                if ready[0]:
+                    conn = connection.Connection(config.server.buf_size)
+                    client_addr = conn.accept(self.__server_sock)
+                    print 'Hello, ', client_addr
+                    conn.get_requests_forever()
+                    self.__conns_lock.acquire()
+                    try:
+                        self.__conns.append(conn)
+                    finally:
+                        self.__conns_lock.release()
 
     def shutdown(self):
         if self.__serve == True:
             self.__serve = False
+
             self.__conns_lock.acquire()
             try:
                 for conn in self.__conns:
-                    conn.send_shutdown()
                     conn.shutdown()
                 self.__conns = []
             finally:
                 self.__conns_lock.release()
-
-    def __handle_request_active(self):
-        while self.__serve:
-            self.handle_request()
+            self.__serve_thread.join()
+            self.__server_sock.close()
 
     def handle_request(self):
+        for conn in self.__conns:
+            if not conn.connected:
+                self.__del_conn(conn)
+                continue
+            self.__handle_request_for_conn(conn)
+            
+    def __del_conn(self, conn):
         self.__conns_lock.acquire()
         try:
-            for i in range(len(self.__conns)):
-                self.__handle_request_once(i)
+            self.__conns.remove(conn)
+        except ValueError:
+            pass
         finally:
             self.__conns_lock.release()
+        print 'Bye, ', conn
 
-    def __handle_request_once(self, index):
-        conn = self.__conns[index]
-        wait = -1 if self.__mode == config.server.active_mode else 0
-        res = conn.recv(timeout=wait)
-        if res is None:
-            return res
-        msg_type, seq_num, action_type, data = res
-        print config.msg_str[msg_type], seq_num, config.action_str[action_type]
-        print data
+    def __handle_request_for_conn(self, conn):
+        while True:
+            request = None
+            try:
+                request = conn.requests_cache.get_nowait()
+            except Queue.Empty:
+                return None
+            msg_type, seq_num, action_type, data = request
+            print config.msg_str[msg_type], seq_num, config.action_str[action_type]
+            print data
+            res = None
+            if msg_type == config.msg.request:
+                res = self.__dispatch_request(conn, action_type, data)
+            if isinstance(res, Exception):
+                conn.send_exception(seq_num, res)
+            else:
+                conn.send_reply(seq_num, action_type, res)
+
+    def __dispatch_request(self, conn, action_type, data):
         res = None
-        if msg_type == config.msg.request:
-            if action_type == config.action.getattr:
-                res = self.__handle_getattr(data)
-            elif action_type == config.action.setattr:
-                res = self.__handle_setattr(data)
-            elif action_type == config.action.delattr:
-                res = self.__handle_delattr(data)
-            elif action_type == config.action.str:
-                res = self.__handle_str(data)
-            elif action_type == config.action.repr:
-                res = self.__handle_repr(data)
-            elif action_type == config.action.serverproxy:
-                res = self.__handle_serverproxy(data)
-            elif action_type == config.action.call:
-                res = self.__handle_call(data)
-            elif action_type == config.action.dir:
-                res = self.__handle_dir(data)
-            elif action_type == config.action.cmp:
-                res = self.__handle_cmp(data)
-            elif action_type == config.action.hash:
-                res = self.__handle_hash(data)
-            elif action_type == config.action.delete:
-                res = self.__handle_del(conn, data)
-            elif action_type == config.action.contains:
-                res = self.__handle_contains(data)
-            elif action_type == config.action.delitem:
-                res = self.__handle_delitem(data)
-            elif action_type == config.action.getitem:
-                res = self.__handle_getitem(data)
-            elif action_type == config.action.iter:
-                res = self.__handle_iter(data)
-            elif action_type == config.action.len:
-                res = self.__handle_len(data)
-            elif action_type == config.action.setitem:
-                res = self.__handle_setitem(data)
-            elif action_type == config.action.next:
-                res = self.__handle_next(data)
-        elif msg_type == config.msg.shutdown:
-            print 'Bye, ', conn
-            self.__conns.pop(index)
-        if isinstance(res, Exception):
-            conn.send_exception(seq_num, res)
-        else:
-            conn.send_reply(seq_num, action_type, res)
+        if action_type == config.action.getattr:
+            res = self.__handle_getattr(data)
+        elif action_type == config.action.setattr:
+            res = self.__handle_setattr(data)
+        elif action_type == config.action.delattr:
+            res = self.__handle_delattr(data)
+        elif action_type == config.action.str:
+            res = self.__handle_str(data)
+        elif action_type == config.action.repr:
+            res = self.__handle_repr(data)
+        elif action_type == config.action.serverproxy:
+            res = self.__handle_serverproxy(data)
+        elif action_type == config.action.call:
+            res = self.__handle_call(data)
+        elif action_type == config.action.dir:
+            res = self.__handle_dir(data)
+        elif action_type == config.action.cmp:
+            res = self.__handle_cmp(data)
+        elif action_type == config.action.hash:
+            res = self.__handle_hash(data)
+        elif action_type == config.action.delete:
+            res = self.__handle_del(conn, data)
+        elif action_type == config.action.contains:
+            res = self.__handle_contains(data)
+        elif action_type == config.action.delitem:
+            res = self.__handle_delitem(data)
+        elif action_type == config.action.getitem:
+            res = self.__handle_getitem(data)
+        elif action_type == config.action.iter:
+            res = self.__handle_iter(data)
+        elif action_type == config.action.len:
+            res = self.__handle_len(data)
+        elif action_type == config.action.setitem:
+            res = self.__handle_setitem(data)
+        elif action_type == config.action.next:
+            res = self.__handle_next(data)
+        return res
 
     def __handle_getattr(self, data):
         obj, attr_name = data
@@ -246,7 +259,3 @@ class GrpcServer(object):
     def execute(self, text):
         exec text
 
-
-if __name__ == '__main__':
-    server = GrpcServer()
-    server.serve_forever(config.server.active_mode)

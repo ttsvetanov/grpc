@@ -7,6 +7,8 @@ import pickle
 import traceback
 import collections
 import types
+import Queue
+import threading
 
 import netref
 import utils
@@ -27,6 +29,8 @@ class Connection(object):
         self.__connected = False
 
         self.__local_objects = utils.CountDict()  # on server
+        self.requests_cache = Queue.Queue()     # on server
+
         self.__proxy_cache = {}    # on client
         self.__netref_classes_cache = {}  # on client
 
@@ -63,6 +67,11 @@ class Connection(object):
     def shutdown(self, flag = socket.SHUT_RDWR):
         if self.__connected:
             try:
+                self.send_shutdown()
+                self.__connected = False
+                if hasattr(self, '_Connection__recv_thread'):
+                    self.__recv_thread.join()
+                    print 'joined'
                 self.__sock.shutdown(flag)
             except:
                 pass
@@ -71,7 +80,6 @@ class Connection(object):
             self.__netref_classes_cache = {}
             self.__sock = None
             self.__seq_num = 1
-            self.__connected = False
     # ...
     # end
     # network control
@@ -111,7 +119,11 @@ class Connection(object):
         data_size = len(pickled_data)
         if data_size > 99999999:
             raise ValueError, 'data size is too large'
-        self.__sock.sendall(str(data_size).zfill(8) + pickled_data)
+        try:
+            self.__sock.sendall(str(data_size).zfill(8) + pickled_data)
+        except socket.error:
+            print 'socket error, shutdown'
+            self.shutdown()
         return seq_num
 
     def __box_request(self, obj):
@@ -163,6 +175,9 @@ class Connection(object):
         ready = select.select([self.__sock], [], [], timeout);
         if ready[0]:
             data_size = int(self.__sock.recv(8))
+            if data_size is None:   # peer closed
+                self.shutdown()
+                return None
         else:
             return None
 
@@ -173,6 +188,7 @@ class Connection(object):
             if ready[0]:
                 rest_data = self.__sock.recv(self.__buffer_size)
                 if rest_data is None:   # peer closed
+                    self.shutdown()
                     return None
                 recvd_size += len(rest_data)
                 pickled_data = "".join([pickled_data, rest_data])
@@ -232,6 +248,19 @@ class Connection(object):
         cls = netref.class_factory(clsname, modname)
         self.__netref_classes_cache[typeinfo] = cls
         return cls(self, oid)
+
+    def get_requests_forever(self):
+        self.__recv_thread = threading.Thread(target=self.__get_requests)
+        self.__recv_thread.start()
+
+    def __get_requests(self):
+        while self.__connected:
+            res = self.recv()
+            if res is None:
+                return res
+            msg_type, seq_num, action_type, data = res
+            if msg_type == config.msg.request:
+                self.requests_cache.put(res)
 
     # ...
     # end

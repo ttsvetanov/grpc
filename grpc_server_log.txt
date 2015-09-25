@@ -1,0 +1,2 @@
+ERROR:root:__handle_call error. function:<bound method GrpcServer.p of <grpc_server.GrpcServer object at 0x02876A70>>
+ERROR:root:__handle_call error. function:<bound method GrpcServer.shutdown of <grpc_server.GrpcServer object at 0x029EE2B0>>
