@@ -25,7 +25,10 @@ class Section(object):
 class Config(object):
     def __init__(self):
         self.__cp = ConfigParser.ConfigParser()
-        self.__cp.read("config.ini")
+        if self.__cp.read("./grpc/config.ini"):
+            pass
+        else:
+            self.__cp.read("./config.ini")
 
     def __getattribute__(self, name):
         if name == '_Config__cp':
