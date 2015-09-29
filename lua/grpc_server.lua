@@ -1,8 +1,7 @@
 local socket = require("socket")
 local Connection = require("connection")
-local lip = require("lip")
 local pnt = require("print")
-local config = lip.load("../config.ini")
+local config = require("config")
 config.msg_str = {'Request', 'Reply', 'Exception', 'Shutdown'}
 config.action_str = {'getattr', 'setattr', 'delattr', 'str',
             'repr', 'call', 'serverproxy', 'dir', 'cmp', 'hash', 'del', 'contains',
@@ -45,6 +44,7 @@ end
 
 function Server:foo()
     print 'foo'
+    error 'error'
     return 'foo'
 end
 

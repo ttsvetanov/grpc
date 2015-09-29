@@ -21,8 +21,7 @@ Add any object you want into the server's field:
 
 Start the server in the background:
 
-    t = threading.Thread(target=server.serve_forever)
-    t.start()
+    server.start()
 
 In your game's main loop, let the server handle RPC requests:
 

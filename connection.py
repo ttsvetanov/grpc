@@ -92,11 +92,17 @@ class Connection(object):
         res = self.__send(config.msg.request, self.__seq_num, action_type, boxed_data)
         if res > 0:
             self.__seq_num += 1
+        else:
+            self.shutdown()
         return res
 
     def send_reply(self, seq_num, action_type, data):
         boxed_data = self.__box_reply(data)
-        return self.__send(config.msg.reply, seq_num, action_type, boxed_data)
+        res = self.__send(config.msg.reply, seq_num, action_type, boxed_data)
+        if res > 0:
+            return res
+        self.shutdown()
+        return -1
 
     def send_shutdown(self):
         try:
@@ -105,8 +111,11 @@ class Connection(object):
             return -1
 
     def send_exception(self, seq_num, data):
-        self.__send(config.msg.exception, seq_num, 0, data)
-        return seq_num
+        res = self.__send(config.msg.exception, seq_num, 0, data)
+        if res > 0:
+            return res
+        self.shutdown()
+        return -1
 
     def __send(self, msg_type, seq_num, action_type, boxed_data):
         if self.__connected == False:
@@ -123,7 +132,7 @@ class Connection(object):
             self.__sock.sendall(str(data_size).zfill(8) + pickled_data)
         except socket.error:
             print 'socket error, shutdown'
-            self.shutdown()
+            return -1
         return seq_num
 
     def __box_request(self, obj):

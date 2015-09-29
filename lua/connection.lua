@@ -4,9 +4,8 @@
 -------------------------------------------------------------------------------
 local socket = require("socket")
 local libpickle = require("libpickle")
-local lip = require("lip")
 local pnt = require("print")
-local config = lip.load("../config.ini")
+local config = require("config")
 local Connection = {}
 
 local __simple_types = {'nil', 'boolean', 'number', 'string'}
