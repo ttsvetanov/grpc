@@ -86,9 +86,10 @@ operation to the proxy, and it will affect the corresponding server object:
     for item in dect_proxy:
         print item
 
-### Note
+# Note
+-------------------------------------------------------------------------------
 
-##### parameters
+### Parameters
 When client calls a RPC function, the parameters can be:
 
 * all value types that can be pickled, including containers
@@ -96,3 +97,47 @@ When client calls a RPC function, the parameters can be:
 * tuple, list, dict which contains proxy object
 
 If the type of parameter is not supported, the client will raise a TypeError.
+
+### Thread safety
+Grpc server handle clients' requests in the main loop (or any game loop that
+user called 'server.handle_request()'), not in a independent thread.
+
+It is because the RPC call may access some resource that the main loop is using.
+This will cause a thread safe problem, and may crash your game.
+
+### None return call
+When client send a call request, it will block and wait for the reply.
+
+Because of the thread safe problem, the Grpc server has to handle the request
+in the main thread. It means that the request from client may not be replied
+immediately, because the main thread is doing some other things that cost
+much time (for example, rendering).
+
+So the user may find the client runs slower then before, here is some methods
+to speed up your client:
+
+1. Use object cache instead of get them every time. For example:
+
+    func = client.server_proxy.game.some_func
+    for i in range(100):
+        func()
+
+is much faster then:
+
+    for i in range(100):
+        client.server_proxy.game.some_func()
+
+2. Use None return call
+Sometimes we don't care about the return value of the RPC call, so Grpc provide
+'None return RPC'. This RPC call return immediately after sent the request,
+instead of blocking and waiting for the reply.
+
+    func = client.server_proxy.game.some_func
+    for i in range(100):
+        func(grpc_need_reply=False)
+
+is much faster then:
+
+    func = client.server_proxy.game.some_func
+    for i in range(100):
+        func()

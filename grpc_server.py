@@ -114,8 +114,10 @@ class GrpcServer(object):
                 return None
             msg_type, seq_num, action_type, data = request
             print config.msg_str[msg_type], seq_num, config.action_str[action_type]
-            if action_type != config.action.call:
+            try:
                 print data
+            except:
+                pass
             res = None
             if msg_type == config.msg.request:
                 need_reply, data = data
