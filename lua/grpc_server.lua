@@ -94,7 +94,11 @@ function Server:handle_request(conn)
 
     local status, res = true, nil
     if msg_type == config.msg.request then
+        local need_reply, data = table.unpack(data)
         status, res = pcall(self.__dispatch_request, self, action_type, data)
+        if not need_reply then
+            return nil
+        end
     elseif msg_type == config.msg.shutdown then
         print ('Bye, ', conn)
     else

@@ -191,10 +191,12 @@ class Connection(object):
         # get data size
         ready = select.select([self.__sock], [], [], timeout);
         if ready[0]:
-            data_size = int(self.__sock.recv(8))
-            if data_size is None:   # peer closed
+            data_size = self.__sock.recv(8)
+            if not data_size:   # peer closed
                 self.shutdown()
                 return None
+            else:
+                data_size = int(data_size)
         else:
             return None
 
@@ -204,7 +206,7 @@ class Connection(object):
             ready = select.select([self.__sock], [], [], 1.0);
             if ready[0]:
                 rest_data = self.__sock.recv(data_size - recvd_size)
-                if rest_data is None:   # peer closed
+                if not rest_data:   # peer closed
                     self.shutdown()
                     return None
                 recvd_size += len(rest_data)
