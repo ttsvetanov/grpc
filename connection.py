@@ -7,8 +7,11 @@ import pickle
 import traceback
 import collections
 import types
-import Queue
 import threading
+try:
+    import queue as Queue
+except:
+    import Queue
 
 import netref
 import utils
@@ -29,10 +32,11 @@ class Connection(object):
         self.__connected = False
 
         self.__local_objects = utils.CountDict()  # on server
-        self.requests_cache = Queue.Queue()     # on server
+        self.requests_cache = Queue.PriorityQueue()     # on server
 
         self.__proxy_cache = {}    # on client
         self.__netref_classes_cache = {}  # on client
+        self.replies_cache = Queue.PriorityQueue()   # on client
 
     def __del__(self):
         self.shutdown()
@@ -44,6 +48,8 @@ class Connection(object):
         client_sock, address = server_sock.accept()
         self.__sock = client_sock
         self.__connected = True
+        self.__recv_thread = threading.Thread(target=self.__recv_forever)
+        self.__recv_thread.start()
         return address
 
     def connect(self, server_address):
@@ -56,6 +62,8 @@ class Connection(object):
                 if self.__sock:
                     self.__connected = True
                     print 'connected'
+                    self.__recv_thread = threading.Thread(target=self.__recv_forever)
+                    self.__recv_thread.start()
                     break
             except socket.timeout:
                 print 'timeout'
@@ -195,7 +203,7 @@ class Connection(object):
         while data_size > recvd_size:
             ready = select.select([self.__sock], [], [], 1.0);
             if ready[0]:
-                rest_data = self.__sock.recv(self.__buffer_size)
+                rest_data = self.__sock.recv(data_size - recvd_size)
                 if rest_data is None:   # peer closed
                     self.shutdown()
                     return None
@@ -258,18 +266,18 @@ class Connection(object):
         self.__netref_classes_cache[typeinfo] = cls
         return cls(self, oid)
 
-    def get_requests_forever(self):
-        self.__recv_thread = threading.Thread(target=self.__get_requests)
-        self.__recv_thread.start()
-
-    def __get_requests(self):
+    def __recv_forever(self):
         while self.__connected:
             res = self.recv()
             if res is None:
                 return res
             msg_type, seq_num, action_type, data = res
             if msg_type == config.msg.request:
-                self.requests_cache.put(res)
+                self.requests_cache.put((seq_num, res))
+            elif msg_type == config.msg.reply:
+                self.replies_cache.put((seq_num, res))
+            elif msg_type == config.msg.exception:
+                self.replies_cache.put((seq_num, res))
 
     # ...
     # end
@@ -278,19 +286,29 @@ class Connection(object):
     # useful functions
     # start
     # ...
-    def sync_request(self, action_type, data=None):
+    def sync_request(self, action_type, data=None, need_reply=True):
+        data = (need_reply, data)
         seq_num = self.send_request(action_type, data)
-        if seq_num < 0:
+        if seq_num < 0 or not need_reply:
             return None
-        msg_type, recv_seq_num, action_type, recv_data = self.recv()
-        if msg_type == config.msg.reply and recv_seq_num == seq_num:
-            return recv_data
-        if msg_type == config.msg.exception:
-            if isinstance(recv_data, Exception):
+        while True:
+            if self.replies_cache.empty():
+                continue
+            msg_type, recv_seq_num, action_type, recv_data = self.replies_cache.get()[1]
+            if seq_num < recv_seq_num:
+                self.replies_cache.put((recv_seq_num, (msg_type, recv_seq_num, action_type, recv_data)))
+                print seq_num, recv_seq_num
+                continue
+            if seq_num > recv_seq_num:
+                continue
+            if msg_type == config.msg.reply:
                 return recv_data
-            elif isinstance(recv_data, types.StringType):
-                return Exception(recv_data)
-        return None
+            if msg_type == config.msg.exception:
+                if isinstance(recv_data, Exception):
+                    return recv_data
+                elif isinstance(recv_data, types.StringType):
+                    return Exception(recv_data)
+            return None
 
     @property
     def connected(self):

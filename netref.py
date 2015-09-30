@@ -8,24 +8,30 @@ import sys
 
 
 local_netref_attrs = frozenset([
-    '____conn__', '____oid__', '__class__', '__cmp__', '__del__', '__delattr__',
-    '__dir__', '__doc__', '__getattr__', '__getattribute__', '__hash__',
+    '____conn__', '____oid__', '__cmp__', '__del__', '__delattr__',
+    '__dir__', '__getattr__', '__getattribute__', '__hash__',
     '__init__', '__metaclass__', '__module__', '__new__', '__reduce__',
     '__reduce_ex__', '__repr__', '__setattr__', '__slots__', '__str__',
     '__weakref__', '__dict__',  '__members__', '__methods__',
+    '____cache_attr__', '____need_reply__', '____attr_cache__',
+    'grpc_clear_attr_cache'
     ])
 
 
 class NetRef(object):
     #__slots__ = ["____conn__", "____oid__"]
     
-    def __init__(self, conn, oid):
+    def __init__(self, conn, oid, cache_attr=False, need_reply=True):
         self.____conn__ = conn
         self.____oid__ = oid
+        self.____cache_attr__ = cache_attr
+        self.____need_reply__ = need_reply
+        self.____attr_cache__ = {}
 
     def __del__(self):
         self.____conn__.sync_request(config.action.delete, self)
 
+    '''
     def __getattribute__(self, name):
         if name in local_netref_attrs:
             if name == '__class__' or name == '__doc__':
@@ -35,21 +41,41 @@ class NetRef(object):
             return object.__getattribute__(self, name)
         else:
             return self.__getattr__(name)
+    '''
 
     def __getattr__(self, name):
-        return self.____conn__.sync_request(config.action.getattr, (self, name))
+        if name == '__members__':
+            return self.__dir__()
+        value =  self.____conn__.sync_request(config.action.getattr, (self, name))
+        if self.____cache_attr__:
+            self.____attr_cache__[name] = value
+            if isinstance(value, NetRef):
+                value.____cache_attr__ = self.____cache_attr__
+                value.____need_reply__ = self.____need_reply__
+        return value
 
     def __setattr__(self, name, value):
         if name in local_netref_attrs:
             object.__setattr__(self, name, value)
         else:
+            if self.____cache_attr__:
+                self.____attr_cache__[name] = value
+                if isinstance(value, NetRef):
+                    value.____cache_attr__ = self.____cache_attr__
+                    value.____need_reply__ = self.____need_reply__
             self.____conn__.sync_request(config.action.setattr, (self, name, value))
 
     def __delattr__(self, name):
         if name in local_netref_attrs:
             object.__delattr__(name)
         else:
-            self.____conn__.sync_request(config.action.delattr, (self, name))
+            try:
+                del self.____attr_cache__[name]
+            finally:
+                self.____conn__.sync_request(config.action.delattr, (self, name))
+
+    def grpc_clear_attr_cache(self):
+        self.____attr_cache__ = {}
         
     def __str__(self):
         return self.____conn__.sync_request(config.action.str, self)
@@ -58,7 +84,9 @@ class NetRef(object):
         return self.____conn__.sync_request(config.action.repr, self)
 
     def __call__(self, *args, **kwargs):
-        return self.____conn__.sync_request(config.action.call, (self, args, kwargs))
+        need_reply = kwargs.pop("grpc_need_reply", self.____need_reply__)
+        return self.____conn__.sync_request(config.action.call,
+                (self, args, kwargs), need_reply)
 
     def __dir__(self):
         rlist = self.____conn__.sync_request(config.action.dir, self)

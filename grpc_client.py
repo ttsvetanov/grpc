@@ -12,6 +12,7 @@ import connection
 class GrpcClient(object):
     def __init__(self):
         self.__server_proxy = None
+        self.__fast_server_proxy = None
         self.__conn = connection.Connection(config.client.buf_size)
 
     @property
@@ -19,6 +20,14 @@ class GrpcClient(object):
         if self.__server_proxy is None:
             self.__server_proxy = self.__conn.sync_request(config.action.serverproxy)
         return self.__server_proxy
+
+    @property
+    def fast_server_proxy(self):
+        if self.__fast_server_proxy is None:
+            self.__fast_server_proxy = self.__conn.sync_request(config.action.serverproxy)
+            self.____need_reply__ = False
+            self.____cache_attr__ = True
+        return self.__fast_server_proxy
 
     @property
     def connected(self):

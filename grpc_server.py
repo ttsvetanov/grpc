@@ -6,7 +6,10 @@ import socket
 import threading
 import traceback
 import select
-import Queue
+try:
+    import queue as Queue
+except:
+    import Queue
 
 from config import config
 import connection
@@ -65,7 +68,6 @@ class GrpcServer(object):
                     conn = connection.Connection(config.server.buf_size)
                     client_addr = conn.accept(self.__server_sock)
                     print 'Hello, ', client_addr
-                    conn.get_requests_forever()
                     self.__conns_lock.acquire()
                     try:
                         self.__conns.append(conn)
@@ -107,15 +109,19 @@ class GrpcServer(object):
         while True:
             request = None
             try:
-                request = conn.requests_cache.get_nowait()
+                request = conn.requests_cache.get_nowait()[1]
             except Queue.Empty:
                 return None
             msg_type, seq_num, action_type, data = request
             print config.msg_str[msg_type], seq_num, config.action_str[action_type]
-            print data
+            if action_type != config.action.call:
+                print data
             res = None
             if msg_type == config.msg.request:
+                need_reply, data = data
                 res = self.__dispatch_request(conn, action_type, data)
+                if not need_reply:
+                    return None
             if isinstance(res, Exception):
                 conn.send_exception(seq_num, res)
             else:
