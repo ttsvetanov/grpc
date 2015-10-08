@@ -1,9 +1,7 @@
-#! python2
-#-*- coding: utf-8 -*-
+# !python2
+# -*- coding: utf-8 -*-
 
 from config import config
-import types
-import inspect
 import sys
 
 
@@ -19,8 +17,8 @@ local_netref_attrs = frozenset([
 
 
 class NetRef(object):
-    #__slots__ = ["____conn__", "____oid__"]
-    
+    # __slots__ = ["____conn__", "____oid__"]
+
     def __init__(self, conn, oid, cache_attr=False, need_reply=True):
         self.____conn__ = conn
         self.____oid__ = oid
@@ -46,7 +44,8 @@ class NetRef(object):
     def __getattr__(self, name):
         if name == '__members__':
             return self.__dir__()
-        value =  self.____conn__.sync_request(config.action.getattr, (self, name))
+        value = self.____conn__.sync_request(
+            config.action.getattr, (self, name))
         if self.____cache_attr__:
             self.____attr_cache__[name] = value
             if isinstance(value, NetRef):
@@ -63,7 +62,8 @@ class NetRef(object):
                 if isinstance(value, NetRef):
                     value.____cache_attr__ = self.____cache_attr__
                     value.____need_reply__ = self.____need_reply__
-            self.____conn__.sync_request(config.action.setattr, (self, name, value))
+            self.____conn__.sync_request(
+                config.action.setattr, (self, name, value))
 
     def __delattr__(self, name):
         if name in local_netref_attrs:
@@ -72,11 +72,12 @@ class NetRef(object):
             try:
                 del self.____attr_cache__[name]
             finally:
-                self.____conn__.sync_request(config.action.delattr, (self, name))
+                self.____conn__.sync_request(
+                    config.action.delattr, (self, name))
 
     def grpc_clear_attr_cache(self):
         self.____attr_cache__ = {}
-        
+
     def __str__(self):
         return self.____conn__.sync_request(config.action.str, self)
 
@@ -85,8 +86,8 @@ class NetRef(object):
 
     def __call__(self, *args, **kwargs):
         need_reply = kwargs.pop("grpc_need_reply", self.____need_reply__)
-        return self.____conn__.sync_request(config.action.call,
-                (self, args, kwargs), need_reply)
+        return self.____conn__.sync_request(
+            config.action.call, (self, args, kwargs), need_reply)
 
     def __dir__(self):
         rlist = self.____conn__.sync_request(config.action.dir, self)
@@ -99,7 +100,8 @@ class NetRef(object):
         return self.____conn__.sync_request(config.action.hash, self)
 
     def __contains__(self, item):
-        return self.____conn__.sync_request(config.action.contains, (self, item))
+        return self.____conn__.sync_request(
+            config.action.contains, (self, item))
 
     def __delitem__(self, key):
         return self.____conn__.sync_request(config.action.delitem, (self, key))
@@ -114,7 +116,8 @@ class NetRef(object):
         return self.____conn__.sync_request(config.action.len, self)
 
     def __setitem__(self, key, value):
-        return self.____conn__.sync_request(config.action.setitem, (self, key, value))
+        return self.____conn__.sync_request(
+            config.action.setitem, (self, key, value))
 
     def next(self):
         res = self.____conn__.sync_request(config.action.next, self)
@@ -125,15 +128,15 @@ class NetRef(object):
 
 def class_factory(clsname, modname):
     """Creates a netref class proxying the given class
-    
+
     :param clsname: the class's name
     :param modname: the class's module name
-    
+
     :returns: a netref class
     """
     clsname = str(clsname)
     modname = str(modname)
-    ns = {"__slots__" : ()}
+    ns = {"__slots__": ()}
     ns["__module__"] = modname
     if modname in sys.modules and hasattr(sys.modules[modname], clsname):
         ns["__class__"] = getattr(sys.modules[modname], clsname)

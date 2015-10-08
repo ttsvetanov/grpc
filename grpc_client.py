@@ -1,9 +1,5 @@
-#! python2
-#-*- coding: utf-8 -*-
-
-import logging
-import select
-import pickle
+# !python2
+# -*- coding: utf-8 -*-
 
 from config import config
 import connection
@@ -18,13 +14,15 @@ class GrpcClient(object):
     @property
     def server_proxy(self):
         if self.__server_proxy is None:
-            self.__server_proxy = self.__conn.sync_request(config.action.serverproxy)
+            self.__server_proxy = self.__conn.sync_request(
+                config.action.serverproxy)
         return self.__server_proxy
 
     @property
     def fast_server_proxy(self):
         if self.__fast_server_proxy is None:
-            self.__fast_server_proxy = self.__conn.sync_request(config.action.serverproxy)
+            self.__fast_server_proxy = self.__conn.sync_request(
+                config.action.serverproxy)
             self.____need_reply__ = False
             self.____cache_attr__ = True
         return self.__fast_server_proxy
@@ -37,7 +35,7 @@ class GrpcClient(object):
         self.shutdown()
 
     def connect(self, server_address=(config.server.addr, config.server.port)):
-        res = self.__conn.connect(server_address)
+        self.__conn.connect(server_address)
         self.__server_proxy = None
 
     def shutdown(self):

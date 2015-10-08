@@ -1,8 +1,8 @@
-#! python2
-#-*- coding: utf-8 -*-
+# !python2
+# -*- coding: utf-8 -*-
 
 from grpc_server import GrpcServer
-import threading
+
 
 def gameRun():
     server = GrpcServer()

@@ -1,5 +1,5 @@
-#! python2
-#-*- coding: utf-8 -*-
+# !python2
+# -*- coding: utf-8 -*-
 
 import logging
 import socket
@@ -16,24 +16,27 @@ import connection
 
 
 class ModuleNamespace(object):
-    #__slots__ = ["__getmodule", "__cache"]
+    # __slots__ = ["__getmodule", "__cache"]
     def __init__(self, getmodule):
         self.__getmodule = getmodule
         self.__cache = {}
+
     def __getitem__(self, name):
         if type(name) is tuple:
             name = ".".join(name)
         if name not in self.__cache or self.__cache[name] is None:
             self.__cache[name] = self.__getmodule(name)
         return self.__cache[name]
+
     def __getattr__(self, name):
         return self[name]
 
 
 class GrpcServer(object):
-    def __init__(self, server_port = config.server.port):
+    def __init__(self, server_port=config.server.port):
         self.__server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.__server_sock.setsockopt(
+            socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.__server_sock.bind(('localhost', server_port))
         self.__server_sock.listen(5)
         self.modules = ModuleNamespace(self.__get_module)
@@ -60,7 +63,7 @@ class GrpcServer(object):
         self.__serve_thread.start()
 
     def __serve_forever(self):
-        if self.__serve == False:
+        if self.__serve is False:
             self.__serve = True
             while self.__serve:
                 ready = select.select([self.__server_sock], [], [], 0.5)
@@ -75,7 +78,7 @@ class GrpcServer(object):
                         self.__conns_lock.release()
 
     def shutdown(self):
-        if self.__serve == True:
+        if self.__serve is True:
             self.__serve = False
 
             self.__conns_lock.acquire()
@@ -94,7 +97,7 @@ class GrpcServer(object):
                 self.__del_conn(conn)
                 continue
             self.__handle_request_for_conn(conn)
-            
+
     def __del_conn(self, conn):
         self.__conns_lock.acquire()
         try:
@@ -113,7 +116,11 @@ class GrpcServer(object):
             except Queue.Empty:
                 return None
             msg_type, seq_num, action_type, data = request
-            print config.msg_str[msg_type], seq_num, config.action_str[action_type]
+            print (
+                config.msg_str[msg_type],
+                seq_num,
+                config.action_str[action_type]
+                )
             try:
                 print data
             except:
@@ -184,7 +191,7 @@ class GrpcServer(object):
 
     def __handle_delattr(self, data):
         obj, attr_name = data
-        delattr(boj, attr_name)
+        delattr(obj, attr_name)
 
     def __handle_str(self, data):
         obj = data
@@ -266,4 +273,3 @@ class GrpcServer(object):
 
     def execute(self, text):
         exec text
-

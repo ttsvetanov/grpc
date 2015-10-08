@@ -1,11 +1,10 @@
-#! python2
-#-*- coding: utf-8 -*-
+# ! python2
+# -*- coding: utf-8 -*-
 
 import select
 import socket
 import pickle
 import traceback
-import collections
 import types
 import threading
 try:
@@ -18,7 +17,8 @@ import utils
 from config import config
 
 
-simple_types = frozenset([type(None), int, long, bool, float, str, unicode, complex])
+simple_types = frozenset(
+    [type(None), int, long, bool, float, str, unicode, complex])
 
 
 class Connection(object):
@@ -58,11 +58,13 @@ class Connection(object):
         while True:
             try:
                 print 'connecting'
-                self.__sock = socket.create_connection(server_address, timeout=1)
+                self.__sock = socket.create_connection(
+                    server_address, timeout=1)
                 if self.__sock:
                     self.__connected = True
                     print 'connected'
-                    self.__recv_thread = threading.Thread(target=self.__recv_forever)
+                    self.__recv_thread = threading.Thread(
+                        target=self.__recv_forever)
                     self.__recv_thread.start()
                     break
             except socket.timeout:
@@ -72,7 +74,7 @@ class Connection(object):
                 raise
         return self.__connected
 
-    def shutdown(self, flag = socket.SHUT_RDWR):
+    def shutdown(self, flag=socket.SHUT_RDWR):
         if self.__connected:
             try:
                 self.send_shutdown()
@@ -97,7 +99,8 @@ class Connection(object):
     # ...
     def send_request(self, action_type, data):
         boxed_data = self.__box_request(data)
-        res = self.__send(config.msg.request, self.__seq_num, action_type, boxed_data)
+        res = self.__send(
+            config.msg.request, self.__seq_num, action_type, boxed_data)
         if res > 0:
             self.__seq_num += 1
         else:
@@ -126,16 +129,17 @@ class Connection(object):
         return -1
 
     def __send(self, msg_type, seq_num, action_type, boxed_data):
-        if self.__connected == False:
+        if self.__connected is False:
             return -1
         try:
-            pickled_data = pickle.dumps((msg_type, seq_num, action_type, boxed_data))
+            pickled_data = pickle.dumps(
+                (msg_type, seq_num, action_type, boxed_data))
         except:
             print 'data cannot be pickled'
             raise
         data_size = len(pickled_data)
         if data_size > 99999999:
-            raise ValueError, 'data size is too large'
+            raise ValueError('data size is too large')
         try:
             self.__sock.sendall(str(data_size).zfill(8) + pickled_data)
         except socket.error:
@@ -149,11 +153,14 @@ class Connection(object):
         elif obj is Ellipsis:           # pickle cannot dump Ellipsis
             return config.label.ellipsis, None
         elif type(obj) is tuple:
-            return config.label.tuple, tuple(self.__box_request(item) for item in obj)
+            return config.label.tuple, tuple(
+                self.__box_request(item) for item in obj)
         elif type(obj) is list:
-            return config.label.list, tuple(self.__box_request(item) for item in obj)
+            return config.label.list, tuple(
+                self.__box_request(item) for item in obj)
         elif type(obj) is dict:
-            return config.label.dict, tuple(self.__box_request(item) for item in obj.items())
+            return config.label.dict, tuple(
+                self.__box_request(item) for item in obj.items())
         elif isinstance(obj, netref.NetRef) and obj.____conn__ is self:
             return config.label.local_ref, obj.____oid__
         else:
@@ -167,29 +174,31 @@ class Connection(object):
         elif obj is Ellipsis:           # pickle cannot dump Ellipsis
             return config.label.ellipsis, None
         elif type(obj) is tuple:
-            return config.label.tuple, tuple(self.__box_reply(item) for item in obj)
+            return config.label.tuple, tuple(
+                self.__box_reply(item) for item in obj)
         else:
             self.__local_objects.add(obj)
             try:
                 cls = obj.__class__
             except:
                 cls = type(obj)
-            return config.label.remote_ref, (id(obj), cls.__name__, cls.__module__)
+            return config.label.remote_ref, (
+                id(obj), cls.__name__, cls.__module__)
     # ...
     # end
     # send functions
-        
+
     # recv functions
     # start
     # ...
-    def recv(self, timeout = None):
-        if self.__connected == False:
+    def recv(self, timeout=None):
+        if self.__connected is False:
             return None
         data_size = 0
         recvd_size = 0
 
         # get data size
-        ready = select.select([self.__sock], [], [], timeout);
+        ready = select.select([self.__sock], [], [], timeout)
         if ready[0]:
             data_size = self.__sock.recv(8)
             if not data_size:   # peer closed
@@ -203,7 +212,7 @@ class Connection(object):
         # get data
         pickled_data = ""
         while data_size > recvd_size:
-            ready = select.select([self.__sock], [], [], 1.0);
+            ready = select.select([self.__sock], [], [], 1.0)
             if ready[0]:
                 rest_data = self.__sock.recv(data_size - recvd_size)
                 if not rest_data:   # peer closed
@@ -211,7 +220,7 @@ class Connection(object):
                     return None
                 recvd_size += len(rest_data)
                 pickled_data = "".join([pickled_data, rest_data])
-                
+
         # unbox data
         msg_type, seq_num, action_type, data = pickle.loads(pickled_data)
         try:
@@ -296,9 +305,13 @@ class Connection(object):
         while True:
             if self.replies_cache.empty():
                 continue
-            msg_type, recv_seq_num, action_type, recv_data = self.replies_cache.get()[1]
+            (msg_type, recv_seq_num, action_type, recv_data) = (
+                self.replies_cache.get()[1])
             if seq_num < recv_seq_num:
-                self.replies_cache.put((recv_seq_num, (msg_type, recv_seq_num, action_type, recv_data)))
+                self.replies_cache.put((
+                    recv_seq_num,
+                    (msg_type, recv_seq_num, action_type, recv_data)
+                    ))
                 print seq_num, recv_seq_num
                 continue
             if seq_num > recv_seq_num:

@@ -1,5 +1,5 @@
-#! python2
-#-*- coding: utf-8 -*-
+# !python2
+# -*- coding: utf-8 -*-
 
 import threading
 import weakref
@@ -12,23 +12,23 @@ class CountDict(object):
         self.__dict = {}
 
     def __repr__(self):
-        return repf(self.__dict)
+        return repr(self.__dict)
 
     def __str___(self):
         return self.__repr__()
 
     def __setitem__(self, key, value):
         if key != id(value):
-            raise ValueError, 'key must be id(value)'
+            raise ValueError('key must be id(value)')
         self.__lock.acquire()
         try:
-            if self.__dict.has_key(key):
+            if key in self.__dict:
                 self.__dict[key][1] += 1
             elif (isinstance(value, types.FunctionType)
                     or isinstance(value, types.MethodType)
                     or isinstance(value, types.UnboundMethodType)):
                 ref_value = value
-                self.__dict[key] = [False, 1, value]    # [isweak, count, value]
+                self.__dict[key] = [False, 1, value]   # [isweak, count, value]
                 print 'Ref strong type: ', type(value)
             else:
                 try:
@@ -49,12 +49,12 @@ class CountDict(object):
     def __delitem__(self, key):
         self.__lock.acquire()
         try:
-            if self.__dict.has_key(key):
+            if key in self.__dict:
                 self.__dict[key][1] -= 1
                 if self.__dict[key][1] == 0:
                     del self.__dict[key]
             else:
-                raise KeyError, key
+                raise KeyError(key)
         finally:
             self.__lock.release()
 
