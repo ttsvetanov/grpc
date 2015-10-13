@@ -1,13 +1,14 @@
+local Connection = require("grpc_connection")
 local socket = require("socket")
-local Connection = require("connection")
-local pnt = require("print")
-local config = require("config")
+local config = require("grpc_config")
 config.msg_str = {'Request', 'Reply', 'Exception', 'Shutdown'}
 config.action_str = {'getattr', 'setattr', 'delattr', 'str',
             'repr', 'call', 'serverproxy', 'dir', 'cmp', 'hash', 'del', 'contains',
             'delitem', 'getitem', 'iter', 'len', 'setitem', 'next'}
 
 local Modules = {}
+
+local unpack = unpack or table.unpack
 
 function Modules:new(o)
     o = o or {}
@@ -25,9 +26,9 @@ function Modules:__get_module(name)
     end
 end
 
-local Server = {}
+local GrpcServer = {}
 
-function Server:new(o)
+function GrpcServer:new(o)
     o = o or {}
     setmetatable(o, self)
     self.__index = self
@@ -42,25 +43,25 @@ function Server:new(o)
     return o
 end
 
-function Server:foo()
+function GrpcServer:foo()
     print 'foo'
     error 'error'
     return 'foo'
 end
 
-function Server:p(a, b, c, d)
+function GrpcServer:p(a, b, c, d)
     print(a, b, c, d)
     return 1
 end
 
-function Server:shutdown()
+function GrpcServer:shutdown()
     self.__conn:shutdown()
 end
 
-function Server:serve()
+function GrpcServer:handle_request()
     -- check new connection request
     local conn = self.__conns[#self.__conns]
-    client_info = conn:accept(self.__sock)
+    local client_info = conn:accept(self.__sock)
     if client_info ~= nil then
         print("hello, " .. client_info)
         table.insert(self.__conns, Connection:new())
@@ -68,11 +69,11 @@ function Server:serve()
 
     -- handle request
     for k, v in pairs(self.__conns) do
-        self:handle_request(v)
+        self:handle_request_for_conn(v)
     end
 end
 
-function Server:handle_request(conn)
+function GrpcServer:handle_request_for_conn(conn)
     if not conn.connected then
         return nil
     end
@@ -85,7 +86,7 @@ function Server:handle_request(conn)
     if data ~= nil then
         print('Data--------------------------------------------------------------')
         if type(data) == 'table' then
-            print("|", data, table.unpack(data))
+            print("|", data, unpack(data))
         else
             print(data)
         end
@@ -94,7 +95,7 @@ function Server:handle_request(conn)
 
     local status, res = true, nil
     if msg_type == config.msg.request then
-        local need_reply, data = table.unpack(data)
+        local need_reply, data = unpack(data)
         status, res = pcall(self.__dispatch_request, self, action_type, data)
         if not need_reply then
             return nil
@@ -113,7 +114,7 @@ function Server:handle_request(conn)
     end
 end
 
-function Server:__dispatch_request(action_type, data)
+function GrpcServer:__dispatch_request(action_type, data)
     local res = nil
     if action_type == config.action.getattr then
         res = self:__handle_getattr(data)
@@ -129,45 +130,57 @@ function Server:__dispatch_request(action_type, data)
         res = self:__handle_serverproxy(data)
     elseif action_type == config.action.call then
         res = self:__handle_call(data)
+    elseif action_type == config.action.getitem then
+        res = self:__handle_getitem(data)
+    elseif action_type == config.action.setitem then
+        res = self:__handle_setitem(data)
+    elseif action_type == config.action.delitem then
+        res = self:__handle_delitem(data)
+    elseif action_type == config.action.dir then
+        res = self:__handle_dir(data)
+    elseif action_type == config.action.cmp then
+        res = self:__handle_cmp(data)
+    elseif action_type == config.action.len then
+        res = self:__handle_len(data)
     end
     return res
 end
 
-function Server:__handle_getattr(data)
-    local obj, attr_name = table.unpack(data)
+function GrpcServer:__handle_getattr(data)
+    local obj, attr_name = unpack(data)
     return obj[attr_name]
 end
 
-function Server:__handle_setattr(data)
-    local obj, attr_name, value = table.unpack(data)
-    obj[attr] = value
+function GrpcServer:__handle_setattr(data)
+    local obj, attr_name, value = unpack(data)
+    obj[attr_name] = value
 end
 
-function Server:__handle_delattr(data)
-    local obj, attr_name = table.unpack(data)
+function GrpcServer:__handle_delattr(data)
+    local obj, attr_name = unpack(data)
     obj[attr] = nil
 end
 
-function Server:__handle_str(data)
+function GrpcServer:__handle_str(data)
     local obj = data
     return tostring(obj)
 end
 
-function Server:__handle_repr(data)
+function GrpcServer:__handle_repr(data)
     return self:__handle_str(data)
 end
 
-function Server:__handle_serverproxy(data)
+function GrpcServer:__handle_serverproxy(data)
     print ("__handle_serverproxy")
     return self
 end
 
-function Server:__handle_call(data)
-    local func, args, kwargs = table.unpack(data)
+function GrpcServer:__handle_call(data)
+    local func, args, kwargs = unpack(data)
     print("CallArgs------------------------------------------------------------")
-    print("|", table.unpack(args))
+    print("|", unpack(args))
     print("--------------------------------------------------------------------")
-    local status, res = pcall(func, table.unpack(args))
+    local status, res = pcall(func, unpack(args))
     if status then
         return res
     else
@@ -175,7 +188,22 @@ function Server:__handle_call(data)
     end
 end
 
-function Server:__handle_dir(data)
+function GrpcServer:__handle_getitem(data)
+    local obj, key = unpack(data)
+    return obj[key]
+end
+
+function GrpcServer:__handle_delitem(data)
+    local obj, key = unpack(data)
+    obj[key] = nil
+end
+
+function GrpcServer:__handle_setitem(data)
+    local obj, key, value = unpack(data)
+    obj[key] = value
+end
+
+function GrpcServer:__handle_dir(data)
     local obj = data
     local res = nil
     if type(obj) == 'table' then
@@ -187,8 +215,8 @@ function Server:__handle_dir(data)
     return res
 end
 
-function Server:__handle_cmp(data)
-    local obj, other = table.unpack(data)
+function GrpcServer:__handle_cmp(data)
+    local obj, other = unpack(data)
     if obj < other then
         return -1
     elseif obj == other then
@@ -198,8 +226,13 @@ function Server:__handle_cmp(data)
     end
 end
 
-return Server
+function GrpcServer:__handle_len(data)
+    local obj = data
+    return #obj
+end
+
+return GrpcServer
 
 -- test
---s = Server:new()
+--s = GrpcServer:new()
 --s:serve_forever()

@@ -11,8 +11,8 @@ try:
 except:
     import Queue
 
-from config import config
-import connection
+from grpc_config import config
+import grpc_connection
 
 
 class ModuleNamespace(object):
@@ -45,19 +45,9 @@ class GrpcServer(object):
         self.__serve = False
         self.__serve_thread = threading.Thread(target=self.__serve_forever)
 
-        self.test = 2
-        self.d = {}
-        self.l = []
 
     def __del__(self):
         self.shutdown()
-
-    def foo(self):
-        print 'foo'
-        return 'foo'
-
-    def p(self, arg):
-        print arg
 
     def start(self):
         self.__serve_thread.start()
@@ -68,7 +58,7 @@ class GrpcServer(object):
             while self.__serve:
                 ready = select.select([self.__server_sock], [], [], 0.5)
                 if ready[0]:
-                    conn = connection.Connection(config.server.buf_size)
+                    conn = grpc_connection.Connection(config.server.buf_size)
                     client_addr = conn.accept(self.__server_sock)
                     print 'Hello, ', client_addr
                     self.__conns_lock.acquire()
@@ -181,9 +171,9 @@ class GrpcServer(object):
         try:
             attr = getattr(obj, attr_name)
             return attr
-        except:
+        except Exception as e:
             traceback.print_exc()
-        return None
+            return e
 
     def __handle_setattr(self, data):
         obj, attr_name, value = data

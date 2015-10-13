@@ -186,7 +186,10 @@ namespace {
 
 }
 
-extern "C" int luaopen_libpickle (lua_State *L) {
-    luaL_newlib(L, libpickle);
-    return 1;
+extern "C" {
+    int luaopen_libpickle (lua_State *L) {
+        luaL_register(L, "libpickle", libpickle);
+        //luaL_newlib(L, libpickle);    // lua 5.2+
+        return 1;
+    }
 }

@@ -11,9 +11,9 @@ Remote Procedure Call for Games
 
 Create a server:
 
-    server = grpc.GrpcServer(port)
+    server = grpc.Server(port)
 
-You can create server with `grpc.GrpcServer()` witch use default configuration.
+You can create server with `grpc.Server()` witch use default configuration.
 
 Add any object you want into the server's field:
 
@@ -35,7 +35,7 @@ Before exit game, call shutdown() to clear the server thread:
 
 Create a Client:
 
-    client = grpc.GrpcClient()
+    client = grpc.Client()
 
 Connect to the server:
 

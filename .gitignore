@@ -64,3 +64,10 @@ target/
 
 # symbol link
 lua/picklingtools
+
+# lib
+*.so
+*.o
+*.a
+*.lib
+*.dll

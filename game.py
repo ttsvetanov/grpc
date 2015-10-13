@@ -4,11 +4,30 @@
 from grpc_server import GrpcServer
 
 
-def gameRun():
-    server = GrpcServer()
-    server.start()
-    while True:
-        server.handle_request()
+class Game(object):
+    def __init__(self):
+        self.num = 2
+        self.dct = {}
+        self.lst = []
+
+    def foo(self):
+        print 'foo'
+        return 'foo'
+
+    def pnt(self, arg):
+        print arg
+
+    def run(self):
+        server = GrpcServer()
+        server.game = self
+        server.start()
+        try:
+            while True:
+                server.handle_request()
+        except KeyboardInterrupt:
+            server.shutdown()
+
 
 if __name__ == '__main__':
-    gameRun()
+    game = Game()
+    game.run()

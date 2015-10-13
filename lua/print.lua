@@ -1,6 +1,6 @@
-local Print = {}
+local Utils = {}
 
-function Print.print_lua_table(lua_table, indent)
+function Utils.print_lua_table(lua_table, indent)
 	indent = indent or 0
 	for k, v in pairs(lua_table) do
 		if type(k) == "string" then
@@ -14,7 +14,7 @@ function Print.print_lua_table(lua_table, indent)
 		formatting = szPrefix.."["..k.."]".." = "..szSuffix
 		if type(v) == "table" then
 			print(formatting)
-			Print.print_lua_table(v, indent + 1)
+			Utils.print_lua_table(v, indent + 1)
 			print(szPrefix.."},")
 		else
 			local szValue = ""
@@ -28,4 +28,4 @@ function Print.print_lua_table(lua_table, indent)
 	end
 end
 
-return Print
+return Utils
