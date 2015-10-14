@@ -16,20 +16,22 @@ import grpc_connection
 
 
 class ModuleNamespace(object):
-    # __slots__ = ["__getmodule", "__cache"]
-    def __init__(self, getmodule):
-        self.__getmodule = getmodule
+    def __init__(self):
         self.__cache = {}
 
     def __getitem__(self, name):
         if type(name) is tuple:
             name = ".".join(name)
         if name not in self.__cache or self.__cache[name] is None:
-            self.__cache[name] = self.__getmodule(name)
+            self.__cache[name] = self.__get_module(name)
         return self.__cache[name]
 
     def __getattr__(self, name):
         return self[name]
+
+    def __get_module(self, name):
+        return __import__(name, None, None, '*')
+
 
 
 class GrpcServer(object):
@@ -39,7 +41,7 @@ class GrpcServer(object):
             socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.__server_sock.bind(('localhost', server_port))
         self.__server_sock.listen(5)
-        self.modules = ModuleNamespace(self.__get_module)
+        self.modules = ModuleNamespace()
         self.__conns = []
         self.__conns_lock = threading.Lock()
         self.__serve = False
@@ -118,13 +120,14 @@ class GrpcServer(object):
             res = None
             if msg_type == config.msg.request:
                 need_reply, data = data
-                res = self.__dispatch_request(conn, action_type, data)
-                if not need_reply:
-                    return None
-            if isinstance(res, Exception):
-                conn.send_exception(seq_num, res)
-            else:
-                conn.send_reply(seq_num, action_type, res)
+                try:
+                    res = self.__dispatch_request(conn, action_type, data)
+                except Exception as e:
+                    res = e
+                if isinstance(res, Exception):
+                    conn.send_exception(seq_num, res)
+                elif need_reply:
+                    conn.send_reply(seq_num, action_type, res)
 
     def __dispatch_request(self, conn, action_type, data):
         res = None
@@ -152,28 +155,24 @@ class GrpcServer(object):
             res = self.__handle_del(conn, data)
         elif action_type == config.action.contains:
             res = self.__handle_contains(data)
-        elif action_type == config.action.delitem:
-            res = self.__handle_delitem(data)
         elif action_type == config.action.getitem:
             res = self.__handle_getitem(data)
-        elif action_type == config.action.iter:
-            res = self.__handle_iter(data)
-        elif action_type == config.action.len:
-            res = self.__handle_len(data)
         elif action_type == config.action.setitem:
             res = self.__handle_setitem(data)
+        elif action_type == config.action.delitem:
+            res = self.__handle_delitem(data)
+        elif action_type == config.action.len:
+            res = self.__handle_len(data)
+        elif action_type == config.action.iter:
+            res = self.__handle_iter(data)
         elif action_type == config.action.next:
             res = self.__handle_next(data)
         return res
 
     def __handle_getattr(self, data):
         obj, attr_name = data
-        try:
-            attr = getattr(obj, attr_name)
-            return attr
-        except Exception as e:
-            traceback.print_exc()
-            return e
+        attr = getattr(obj, attr_name)
+        return attr
 
     def __handle_setattr(self, data):
         obj, attr_name, value = data
@@ -197,13 +196,8 @@ class GrpcServer(object):
     def __handle_call(self, data):
         func, args, kwargs = data
         res = None
-        try:
-            res = func(*args, **kwargs)
-            return res
-        except Exception as e:
-            logging.error("__handle_call error. function:{}".format(str(func)))
-            traceback.print_exc()
-            return e
+        res = func(*args, **kwargs)
+        return res
 
     def __handle_dir(self, data):
         obj = data
@@ -211,10 +205,7 @@ class GrpcServer(object):
 
     def __handle_cmp(self, data):
         obj, other = data
-        try:
-            return type(obj).__cmp__(obj, other)
-        except (AttributeError, TypeError):
-            return NotImplemented
+        return type(obj).__cmp__(obj, other)
 
     def __handle_hash(self, data):
         obj = data
@@ -236,10 +227,6 @@ class GrpcServer(object):
         obj, key = data
         return obj.__getitem__(key)
 
-    def __handle_iter(self, data):
-        obj = data
-        return obj.__iter__()
-
     def __handle_len(self, data):
         obj = data
         return obj.__len__()
@@ -248,15 +235,13 @@ class GrpcServer(object):
         obj, key, value = data
         return obj.__setitem__(key, value)
 
+    def __handle_iter(self, data):
+        obj = data
+        return obj.__iter__()
+
     def __handle_next(self, data):
         obj = data
-        try:
-            return obj.next()
-        except StopIteration as e:
-            return e
-
-    def __get_module(self, name):
-        return __import__(name, None, None, '*')
+        return obj.next()
 
     def eval(self, text):
         return eval(text)

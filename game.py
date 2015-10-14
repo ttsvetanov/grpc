@@ -4,11 +4,15 @@
 from grpc_server import GrpcServer
 
 
+class Player(object):
+    pass
+
 class Game(object):
     def __init__(self):
         self.num = 2
         self.dct = {}
         self.lst = []
+        self.player = Player()
 
     def foo(self):
         print 'foo'

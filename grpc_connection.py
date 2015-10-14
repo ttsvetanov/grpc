@@ -7,6 +7,7 @@ import pickle
 import traceback
 import types
 import threading
+import string
 try:
     import queue as Queue
 except:
@@ -85,6 +86,8 @@ class Connection(object):
                     except:
                         pass
                 self.__sock.shutdown(flag)
+            except socket.error:
+                pass
             except:
                 traceback.print_exc()
             self.__local_objects.clear()
@@ -235,9 +238,11 @@ class Connection(object):
             elif msg_type == config.msg.shutdown:
                 self.shutdown()
             return msg_type, seq_num, action_type, unboxed_data
-        except KeyError:
+        except KeyError as e:
             # send 'object has been del'
-            pass
+            # just on server
+            error_msg = 'object oid=' + str(e) + ' has been deleted'
+            self.send_exception(seq_num, error_msg)
         return None
 
     def __unbox(self, package):
@@ -258,7 +263,7 @@ class Connection(object):
             try:
                 obj = self.__local_objects[value]
             except KeyError:
-                raise
+                raise KeyError(value)
             else:
                 return obj
         elif label == config.label.remote_ref:
@@ -268,19 +273,13 @@ class Connection(object):
         else:
             raise ValueError("invalid label {}".format(label))
 
-    '''
-    def __netref_factory(self, oid, clsname, modname):
-        typeinfo = (clsname, modname)
-        cls = grpc_netref.class_factory(clsname, modname)
-        self.__netref_classes_cache[typeinfo] = cls
-        return cls(self, oid)
-        '''
-
     def __recv_forever(self):
         while self.__connected:
             res = self.recv()
+            # None means peer closed, or error occured
+            # just continue
             if res is None:
-                return res
+                continue
             msg_type, seq_num, action_type, data = res
             if msg_type == config.msg.request:
                 self.requests_cache.put((seq_num, res))
@@ -311,9 +310,12 @@ class Connection(object):
                     recv_seq_num,
                     (msg_type, recv_seq_num, action_type, recv_data)
                     ))
-                print seq_num, recv_seq_num
                 continue
-            if seq_num > recv_seq_num:
+            if seq_num > recv_seq_num and msg_type != config.msg.exception:
+                # recieved reply or exception of previous request
+                # check if it is exception
+                # if not, just ignore
+                # if it is, raise it
                 continue
             if msg_type == config.msg.reply:
                 return recv_data
@@ -321,6 +323,8 @@ class Connection(object):
                 if isinstance(recv_data, Exception):
                     raise recv_data
                 elif isinstance(recv_data, types.StringType):
+                    if string.find(recv_data, 'GrpcStopIteration') != -1:
+                        raise StopIteration()
                     raise Exception(recv_data)
             return None
 

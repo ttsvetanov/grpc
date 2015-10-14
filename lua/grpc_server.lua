@@ -1,10 +1,11 @@
 local Connection = require("grpc_connection")
-local socket = require("socket")
 local config = require("grpc_config")
+local socket = require("socket")
 config.msg_str = {'Request', 'Reply', 'Exception', 'Shutdown'}
 config.action_str = {'getattr', 'setattr', 'delattr', 'str',
-            'repr', 'call', 'serverproxy', 'dir', 'cmp', 'hash', 'del', 'contains',
-            'delitem', 'getitem', 'iter', 'len', 'setitem', 'next'}
+            'repr', 'call', 'serverproxy', 'dir', 'cmp', 'hash', 'del',
+            'contains', 'delitem', 'getitem', 'iter', 'len', 'setitem',
+            'next'}
 
 local Modules = {}
 
@@ -33,7 +34,6 @@ function GrpcServer:new(o)
     setmetatable(o, self)
     self.__index = self
     o.__conns = {Connection:new()}
-    o.test = 1
     o.modules = Modules:new()
     o._G = _G
 
@@ -41,17 +41,6 @@ function GrpcServer:new(o)
     o.__sock:bind(config.server.addr, config.server.port)
     o.__sock:listen(5)
     return o
-end
-
-function GrpcServer:foo()
-    print 'foo'
-    error 'error'
-    return 'foo'
-end
-
-function GrpcServer:p(a, b, c, d)
-    print(a, b, c, d)
-    return 1
 end
 
 function GrpcServer:shutdown()
@@ -69,7 +58,12 @@ function GrpcServer:handle_request()
 
     -- handle request
     for k, v in pairs(self.__conns) do
-        self:handle_request_for_conn(v)
+        if v.connected == false and k ~= #self.__conns then
+            print ('Bye ' .. tostring(v))
+            table.remove(self.__conns, k)
+        elseif v.connected then
+            self:handle_request_for_conn(v)
+        end
     end
 end
 
@@ -84,37 +78,30 @@ function GrpcServer:handle_request_for_conn(conn)
         return nil
     end
     if data ~= nil then
-        print('Data--------------------------------------------------------------')
+        print('Data-----------------------------------------------------------')
         if type(data) == 'table' then
             print("|", data, unpack(data))
         else
             print(data)
         end
-        print("--------------------------------------------------------------------")
+        print("---------------------------------------------------------------")
     end
 
-    local status, res = true, nil
     if msg_type == config.msg.request then
         local need_reply, data = unpack(data)
-        status, res = pcall(self.__dispatch_request, self, action_type, data)
-        if not need_reply then
-            return nil
-        end
-    elseif msg_type == config.msg.shutdown then
-        print ('Bye, ', conn)
-    else
-        conn:send_exception(seq_num, 'bad request')
-        return nil
-    end
+        local status, res = pcall(
+            self.__dispatch_request,
+            self, action_type, conn, data)
 
-    if status == false then
-        conn:send_exception(seq_num, res)
-    else
-        conn:send_reply(seq_num, action_type, res)
+        if status == false then
+            conn:send_exception(seq_num, res)
+        elseif need_reply then
+            conn:send_reply(seq_num, action_type, res)
+        end
     end
 end
 
-function GrpcServer:__dispatch_request(action_type, data)
+function GrpcServer:__dispatch_request(action_type, conn, data)
     local res = nil
     if action_type == config.action.getattr then
         res = self:__handle_getattr(data)
@@ -130,18 +117,28 @@ function GrpcServer:__dispatch_request(action_type, data)
         res = self:__handle_serverproxy(data)
     elseif action_type == config.action.call then
         res = self:__handle_call(data)
+    elseif action_type == config.action.dir then
+        res = self:__handle_dir(data)
+    elseif action_type == config.action.cmp then
+        res = self:__handle_cmp(data)
+    elseif action_type == config.action.hash then   -- not implemented
+        res = self:__handle_hash(data)
+    elseif action_type == config.action.delete then
+        res = self:__handle_del(conn, data)
+    elseif action_type == config.action.contains then
+        res = self:__handle_contains(data)
     elseif action_type == config.action.getitem then
         res = self:__handle_getitem(data)
     elseif action_type == config.action.setitem then
         res = self:__handle_setitem(data)
     elseif action_type == config.action.delitem then
         res = self:__handle_delitem(data)
-    elseif action_type == config.action.dir then
-        res = self:__handle_dir(data)
-    elseif action_type == config.action.cmp then
-        res = self:__handle_cmp(data)
     elseif action_type == config.action.len then
         res = self:__handle_len(data)
+    elseif action_type == config.action.iter then
+        res = self:__handle_iter(data)
+    elseif action_type == config.action.next then
+        res = self:__handle_next(data)
     end
     return res
 end
@@ -188,21 +185,6 @@ function GrpcServer:__handle_call(data)
     end
 end
 
-function GrpcServer:__handle_getitem(data)
-    local obj, key = unpack(data)
-    return obj[key]
-end
-
-function GrpcServer:__handle_delitem(data)
-    local obj, key = unpack(data)
-    obj[key] = nil
-end
-
-function GrpcServer:__handle_setitem(data)
-    local obj, key, value = unpack(data)
-    obj[key] = value
-end
-
 function GrpcServer:__handle_dir(data)
     local obj = data
     local res = nil
@@ -226,9 +208,63 @@ function GrpcServer:__handle_cmp(data)
     end
 end
 
+function GrpcServer:__handle_hash(data)
+    return nil
+end
+
+function GrpcServer:__handle_del(conn, data)
+    local obj = data
+    conn:del_local_object(obj)
+end
+
+function GrpcServer:__handle_contains(data)
+    local obj, item = data
+    for _, value in pairs(obj) do
+        if value == item then
+            return true
+        end
+    end
+    return false
+end
+
+function GrpcServer:__handle_getitem(data)
+    local obj, key = unpack(data)
+    return obj[key]
+end
+
+function GrpcServer:__handle_delitem(data)
+    local obj, key = unpack(data)
+    obj[key] = nil
+end
+
+function GrpcServer:__handle_setitem(data)
+    local obj, key, value = unpack(data)
+    obj[key] = value
+end
+
 function GrpcServer:__handle_len(data)
     local obj = data
     return #obj
+end
+
+function GrpcServer:__handle_iter(data)
+    local obj = data
+    obj.__grpc_iter_index = nil
+    return obj
+end
+
+function GrpcServer:__handle_next(data)
+    local obj = data
+    local nextIndex = obj.__grpc_iter_index
+    nextIndex = next(obj, nextIndex)
+    if nextIndex == '__grpc_iter_index' then
+        nextIndex = next(obj, nextIndex)
+    end
+    if nextIndex == nil then
+        error 'GrpcStopIteration'
+    end
+    obj.__grpc_iter_index = nextIndex
+    return nextIndex
 end
 
 return GrpcServer

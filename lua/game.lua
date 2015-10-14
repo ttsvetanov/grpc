@@ -9,13 +9,24 @@ end
 
 function Game:run()
     local server = GrpcServer:new()
+    server.game = self
+    self.num = 1
+    self.tbl = {}
+    self.player = {}
     local i = 0
     while true do
         i = i+1
     --    print ('gaming' .. i)
         server:handle_request()
-        sleep(0.1)
+        sleep(0.015)
     end
+end
+
+function Game:foo()
+    print(self)
+    print 'foo'
+    -- error 'foo'
+    return 'foo'
 end
 
 Game:run()

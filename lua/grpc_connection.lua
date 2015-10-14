@@ -24,7 +24,7 @@ function Connection:new(o)
     o.__sock = nil
     o.__local_objects = {}
     o.__oid = 1
-    --setmetatable(o.__local_objects, weak_value_metatbl)
+    setmetatable(o.__local_objects, weak_value_metatbl)
     return o
 end
 
@@ -42,6 +42,7 @@ end
 
 function Connection:shutdown()
     if self.connected then
+        self:send_shutdown()
         self.__sock:shutdown("both")
         self.__sock:close()
         self.connected = false
@@ -64,7 +65,6 @@ function Connection:send_shutdown()
 end
 
 function Connection:__send(msg_type, seq_num, action_type, boxed_data)
-    print(msg_type, seq_num, action_type, boxed_data)
     if self.connected == false then
         return -1
     end
@@ -81,10 +81,12 @@ function Connection:__box_reply(obj)
     if simple_types[type(obj)] then
         return {config.label.value, obj}
     else
+        --[[
         local cache_item = {}
         setmetatable(cache_item, weak_value_metatbl)
         cache_item[self.__oid] = obj
-        self.__local_objects[self.__oid] = cache_item
+        ]]
+        self.__local_objects[self.__oid] = obj
         self.__oid = self.__oid + 1
         return {config.label.remote_ref, {self.__oid-1, tostring(obj), tostring(obj)}}
     end
@@ -128,15 +130,16 @@ function Connection:recv(timeout)
     if msg_type == config.msg.request then
         local status, unboxed_data = pcall(self.__unbox, self, data)
         if status == false then
-            -- 'object has been del'
-            print 'object has been del'
+            local oid = string.gmatch(unboxed_data, "oid=(%w+)")()
+            local error_msg = 'object oid=' .. oid .. ' has been deleted'
+            self:send_exception(seq_num, error_msg)
             return nil
         else
             return msg_type, seq_num, action_type, unboxed_data
         end
     elseif msg_type == config.msg.shutdown then
         self:shutdown()
-        return msg_type, seq_num, action_type, unboxed_data
+        return nil
     end
 end
 
@@ -158,11 +161,20 @@ function Connection:__unbox(package)
         end
         return res
     elseif label == config.label.local_ref then
-        local res = self.__local_objects[value][value]
+        local res = self.__local_objects[value]
+        -- res can be nil, it means the obj client referenced has been deleted
         if res == nil then
-            self.__local_objects[value] = nil
+            error ('oid=' .. value)
         end
         return res
+    end
+end
+
+function Connection:del_local_object(obj)
+    for k, v in pairs(self) do
+        if v == obj then
+            self.__local_objects[k] = nil
+        end
     end
 end
 

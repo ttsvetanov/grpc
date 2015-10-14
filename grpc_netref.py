@@ -80,22 +80,5 @@ class NetRef(object):
             config.action.setitem, (self, key, value))
 
     def next(self):
-        res = self.____conn__.sync_request(config.action.next, self)
-        if isinstance(res, StopIteration):
-            raise res
-        return res
+        return self.____conn__.sync_request(config.action.next, self)
 
-
-'''
-def class_factory(clsname, modname):
-    clsname = str(clsname)
-    modname = str(modname)
-    ns = {"__slots__": ()}
-    ns["__module__"] = modname
-    if modname in sys.modules and hasattr(sys.modules[modname], clsname):
-        ns["__class__"] = getattr(sys.modules[modname], clsname)
-    else:
-        # to be resolved by the instance
-        ns["__class__"] = None
-    return type(clsname, (NetRef,), ns)
-    '''
